@@ -15,12 +15,12 @@ var vGridDimensions: Vector3i # the dimensions of our voxelgrid
 func bake_sound_grid() -> void:
 	if not AABBProvider:
 		printerr("no AABBProvider was provided")
-	var dimensions : AABB = get_node_aabb(AABBProvider)
+	var dimensions : AABB = _get_node_aabb(AABBProvider)
 	vGridStartPosition = dimensions.position
 	vGridDimensions = (dimensions.size / cell_size).ceil()
 
 ## converting a global position into a id
-func indexOf(objectPosition: Vector3) -> int:
+func _indexOf(objectPosition: Vector3) -> int:
 	if vGridDimensions == Vector3i.ZERO:
 		printerr("cannot get index if dimensions were not specified")
 		return -1
@@ -30,7 +30,7 @@ func indexOf(objectPosition: Vector3) -> int:
 	return int(voxelPosition.x + voxelPosition.y * vGridDimensions.x + voxelPosition.z * vGridDimensions.x * vGridDimensions.y)
 
 ## returns the combined AABB of a nodes children
-func get_node_aabb(node: Node3D, ignore_top_level: bool = true) -> AABB:
+func _get_node_aabb(node: Node3D, ignore_top_level: bool = true) -> AABB:
 	var box: AABB
 	var has_box := false
 	
