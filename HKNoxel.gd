@@ -77,6 +77,8 @@ func _build_debug_multimesh() -> void:
 	var mmi := MultiMeshInstance3D.new()
 	mmi.multimesh = multimesh
 	add_child(mmi)
+func _ready() -> void:
+	HKNoxelManager.setCurrentNMap(self)
 ## Converting a global position into a id
 func _indexOf(objectPosition: Vector3) -> int:
 	if vGridDimensions == Vector3i.ZERO:
