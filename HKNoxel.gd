@@ -20,13 +20,16 @@ func bake_sound_grid() -> void:
 	vGridStartPosition = dimensions.position
 	vGridDimensions = (dimensions.size / cell_size).ceil()
 	
+	_init_bake_query()
 	var totalCount := vGridDimensions.x * vGridDimensions.y * vGridDimensions.z
+	var wallcount : int
 	print("Iterating over " + str(totalCount) + " cells. this may take some time")
-	for z in vGridDimensions.z:
+	for z in vGridDimensions.z: # beautiful
 		for y in vGridDimensions.y:
 			for x in vGridDimensions.x:
-				totalCount -= 1
-	print("finished: ")
+				if _is_cell_occupied(Vector3(x,y,z)):
+					wallcount += 1;
+	print("finished: " + str(wallcount) + "/" + str(totalCount) + " cells were detected as walls")
 
 ## Converting a global position into a id
 func _indexOf(objectPosition: Vector3) -> int:
