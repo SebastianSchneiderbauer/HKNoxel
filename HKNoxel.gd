@@ -21,7 +21,7 @@ func bake_sound_grid(debug: bool = false) -> void:
 	if debug:
 		remove_debug_visualization()
 		_debug_positions = PackedVector3Array()
-
+	
 	# get dimensions
 	if not AABBProvider:
 		printerr("no AABBProvider was provided")
@@ -45,10 +45,10 @@ func bake_sound_grid(debug: bool = false) -> void:
 					
 					if debug:
 						_debug_positions.push_back(vGridStartPosition + Vector3(x,y,z) * cell_size)
-
+	
 	if debug:
 		_build_debug_multimesh()
-
+	
 	# final message
 	var elapsed_usec := Time.get_ticks_usec() - start_time
 	print("finished: " + str(wallcount) + "/" + str(totalCount) + " cells were detected as walls in " + str(elapsed_usec / 1000.0) + " ms")
@@ -62,14 +62,14 @@ func _build_debug_multimesh() -> void:
 	var mesh: Mesh = template.mesh.duplicate()
 	mesh.size = Vector3(cell_size, cell_size, cell_size)
 	template.queue_free()
-
+	
 	var multimesh := MultiMesh.new()
 	multimesh.transform_format = MultiMesh.TRANSFORM_3D
 	multimesh.mesh = mesh
 	multimesh.instance_count = _debug_positions.size()
 	for i in _debug_positions.size():
 		multimesh.set_instance_transform(i, Transform3D(Basis(), _debug_positions[i]))
-
+	
 	var mmi := MultiMeshInstance3D.new()
 	mmi.multimesh = multimesh
 	add_child(mmi)
