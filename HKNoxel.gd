@@ -77,6 +77,8 @@ func _build_debug_multimesh() -> void:
 	var mmi := MultiMeshInstance3D.new()
 	mmi.multimesh = multimesh
 	add_child(mmi)
+	if Engine.is_editor_hint():
+		mmi.owner = get_tree().edited_scene_root
 func _ready() -> void:
 	HKNoxelManager.setCurrentNMap(self)
 ## Converting a global position into a id
