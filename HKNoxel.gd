@@ -4,7 +4,7 @@ class_name NoxelMap
 extends Node3D
 
 ## The size of the sound voxels.
-@export var cell_size: float = 1.5
+@export var cell_size: float = 1
 ## What the baking process sees as walls. Its recommended to have seperate layers for decoration and actual walls, so props dont block Noxels
 @export_flags_3d_physics var wall_collision_mask: int = 1
 ## The node that defines the bounding box of the map. Merges its childrens AABBs, so make sure there are actual providers as children.
@@ -35,7 +35,6 @@ func bake_sound_grid(debug: bool = false) -> void:
 	var totalCount := vGridDimensions.x * vGridDimensions.y * vGridDimensions.z
 	wallBakeData = NoxelWallStorage.new(totalCount)
 	var wallcount : int
-	print("Iterating over " + str(totalCount) + " cells. This could take some time on old hardware...")
 	for z in vGridDimensions.z: # beautiful
 		for y in vGridDimensions.y:
 			for x in vGridDimensions.x:
@@ -47,14 +46,19 @@ func bake_sound_grid(debug: bool = false) -> void:
 						_debug_positions.push_back(vGridStartPosition + Vector3(x,y,z) * cell_size)
 	
 	if debug:
+		print("DEBUG MODE: creating debug-meshes")
 		_build_debug_multimesh()
 	
 	# final message
 	var elapsed_usec := Time.get_ticks_usec() - start_time
-	print("finished: " + str(wallcount) + "/" + str(totalCount) + " cells were detected as walls in " + str(elapsed_usec / 1000.0) + " ms")
+	print("finished baking: " + str(wallcount) + "/" + str(totalCount) + " (" + str(float(wallcount) / float(totalCount) * 100).substr(0, 5) + " %) cells were detected as walls in " + str(elapsed_usec / 1000.0) + " ms")
 func remove_debug_visualization():
+	var count : int = 0
 	for child in get_children():
 		child.queue_free()
+		count += 1
+	if count > 0:
+		print("removed " + str(count) + " debug-meshes")
 const DEBUG_MESH = preload("res://addons/HKNoxel/debugMesh.tscn")
 ## Draws all debug cells in a single MultiMeshInstance3D instead of one node per cell, avoiding per-cell scene-tree overhead
 func _build_debug_multimesh() -> void:
