@@ -12,6 +12,9 @@ extends Node3D
 @export_category("DO NOT TOUCH")
 @export var wallBakeData : NoxelWallStorage
 
+signal bake_progress(progress: float)
+signal bake_complete()
+
 var vGridStartPosition: Vector3
 var vGridDimensions: Vector3i # the dimensions of our voxelgrid
 var _debug_positions: PackedVector3Array
@@ -29,29 +32,37 @@ func bake_sound_grid(debug: bool = false) -> void:
 	var dimensions : AABB = _get_node_aabb(AABBProvider)
 	vGridStartPosition = dimensions.position
 	vGridDimensions = (dimensions.size / cell_size).ceil()
+	print(vGridStartPosition," ",vGridDimensions)
 	
 	# bake walls
 	_init_bake_query()
 	var totalCount := vGridDimensions.x * vGridDimensions.y * vGridDimensions.z
 	wallBakeData = NoxelWallStorage.new(totalCount)
 	var wallcount : int
+	var tree := get_tree()
 	for z in vGridDimensions.z: # beautiful
 		for y in vGridDimensions.y:
 			for x in vGridDimensions.x:
 				if _is_cell_occupied(vGridStartPosition + Vector3(x,y,z) * cell_size):
 					wallcount += 1;
 					wallBakeData.updateWall(_indexOf(Vector3(x,y,z)), true)
-					
+
 					if debug:
 						_debug_positions.push_back(vGridStartPosition + Vector3(x,y,z) * cell_size)
-	
+
+		# yield periodically so the engine doesn't freeze on large grids and progress can be shown
+		bake_progress.emit(float(z + 1) / float(vGridDimensions.z))
+		if tree:
+			await tree.process_frame
+
 	if debug:
 		print("DEBUG MODE: creating debug-meshes")
 		_build_debug_multimesh()
-	
+
 	# final message
 	var elapsed_usec := Time.get_ticks_usec() - start_time
 	print("finished baking: " + str(wallcount) + "/" + str(totalCount) + " (" + str(float(wallcount) / float(totalCount) * 100).substr(0, 5) + " %) cells were detected as walls in " + str(elapsed_usec / 1000.0) + " ms")
+	bake_complete.emit()
 func remove_debug_visualization():
 	var count : int = 0
 	for child in get_children():
@@ -79,6 +90,9 @@ func _build_debug_multimesh() -> void:
 	add_child(mmi)
 	if Engine.is_editor_hint():
 		mmi.owner = get_tree().edited_scene_root
+	elif owner:
+		# inherit our own owner so PackedScene.pack() keeps this node when the map is compiled at runtime
+		mmi.owner = owner
 func _ready() -> void:
 	HKNoxelManager.setCurrentNMap(self)
 ## Converting a global position into a id
