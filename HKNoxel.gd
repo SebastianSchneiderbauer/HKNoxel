@@ -14,12 +14,14 @@ extends Node3D
 
 var vGridStartPosition: Vector3
 var vGridDimensions: Vector3i # the dimensions of our voxelgrid
+var _debug_positions: PackedVector3Array
 func bake_sound_grid(debug: bool = false) -> void:
 	# init
 	var start_time := Time.get_ticks_usec()
 	if debug:
 		remove_debug_visualization()
-	
+		_debug_positions = PackedVector3Array()
+
 	# get dimensions
 	if not AABBProvider:
 		printerr("no AABBProvider was provided")
@@ -42,8 +44,11 @@ func bake_sound_grid(debug: bool = false) -> void:
 					wallBakeData.updateWall(_indexOf(Vector3(x,y,z)), true)
 					
 					if debug:
-						_placeDebugVisual(vGridStartPosition + Vector3(x,y,z) * cell_size)
-	
+						_debug_positions.push_back(vGridStartPosition + Vector3(x,y,z) * cell_size)
+
+	if debug:
+		_build_debug_multimesh()
+
 	# final message
 	var elapsed_usec := Time.get_ticks_usec() - start_time
 	print("finished: " + str(wallcount) + "/" + str(totalCount) + " cells were detected as walls in " + str(elapsed_usec / 1000.0) + " ms")
@@ -51,11 +56,23 @@ func remove_debug_visualization():
 	for child in get_children():
 		child.queue_free()
 const DEBUG_MESH = preload("res://addons/HKNoxel/debugMesh.tscn")
-func _placeDebugVisual(spawnPosition: Vector3):
-	var instance = DEBUG_MESH.instantiate()
-	instance.mesh.size = Vector3(cell_size, cell_size, cell_size)
-	instance.global_position = spawnPosition
-	add_child(instance)
+## Draws all debug cells in a single MultiMeshInstance3D instead of one node per cell, avoiding per-cell scene-tree overhead
+func _build_debug_multimesh() -> void:
+	var template := DEBUG_MESH.instantiate()
+	var mesh: Mesh = template.mesh.duplicate()
+	mesh.size = Vector3(cell_size, cell_size, cell_size)
+	template.queue_free()
+
+	var multimesh := MultiMesh.new()
+	multimesh.transform_format = MultiMesh.TRANSFORM_3D
+	multimesh.mesh = mesh
+	multimesh.instance_count = _debug_positions.size()
+	for i in _debug_positions.size():
+		multimesh.set_instance_transform(i, Transform3D(Basis(), _debug_positions[i]))
+
+	var mmi := MultiMeshInstance3D.new()
+	mmi.multimesh = multimesh
+	add_child(mmi)
 ## Converting a global position into a id
 func _indexOf(objectPosition: Vector3) -> int:
 	if vGridDimensions == Vector3i.ZERO:
