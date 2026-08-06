@@ -9,10 +9,18 @@ extends Node3D
 @export_flags_3d_physics var wall_collision_mask: int = 1
 ## The node that defines the bounding box of the map. Merges its childrens AABBs, so make sure there are actual providers as children.
 @export var AABBProvider: Node3D
+@export_category("DO NOT TOUCH")
+@export var wallBakeData : NoxelWallStorage
 
 var vGridStartPosition: Vector3
 var vGridDimensions: Vector3i # the dimensions of our voxelgrid
-func bake_sound_grid() -> void:
+func bake_sound_grid(debug: bool = false) -> void:
+	# init
+	var start_time := Time.get_ticks_usec()
+	if debug:
+		remove_debug_visualization()
+	
+	# get dimensions
 	if not AABBProvider:
 		printerr("no AABBProvider was provided")
 		return
@@ -20,17 +28,34 @@ func bake_sound_grid() -> void:
 	vGridStartPosition = dimensions.position
 	vGridDimensions = (dimensions.size / cell_size).ceil()
 	
+	# bake walls
 	_init_bake_query()
 	var totalCount := vGridDimensions.x * vGridDimensions.y * vGridDimensions.z
+	wallBakeData = NoxelWallStorage.new(totalCount)
 	var wallcount : int
-	print("Iterating over " + str(totalCount) + " cells. this may take some time")
+	print("Iterating over " + str(totalCount) + " cells. This could take some time on old hardware...")
 	for z in vGridDimensions.z: # beautiful
 		for y in vGridDimensions.y:
 			for x in vGridDimensions.x:
-				if _is_cell_occupied(Vector3(x,y,z)):
+				if _is_cell_occupied(vGridStartPosition + Vector3(x,y,z) * cell_size):
 					wallcount += 1;
-	print("finished: " + str(wallcount) + "/" + str(totalCount) + " cells were detected as walls")
-
+					wallBakeData.updateWall(_indexOf(Vector3(x,y,z)), true)
+					
+					if debug:
+						_placeDebugVisual(vGridStartPosition + Vector3(x,y,z) * cell_size)
+	
+	# final message
+	var elapsed_usec := Time.get_ticks_usec() - start_time
+	print("finished: " + str(wallcount) + "/" + str(totalCount) + " cells were detected as walls in " + str(elapsed_usec / 1000.0) + " ms")
+func remove_debug_visualization():
+	for child in get_children():
+		child.queue_free()
+const DEBUG_MESH = preload("res://addons/HKNoxel/debugMesh.tscn")
+func _placeDebugVisual(spawnPosition: Vector3):
+	var instance = DEBUG_MESH.instantiate()
+	instance.mesh.size = Vector3(cell_size, cell_size, cell_size)
+	instance.global_position = spawnPosition
+	add_child(instance)
 ## Converting a global position into a id
 func _indexOf(objectPosition: Vector3) -> int:
 	if vGridDimensions == Vector3i.ZERO:
