@@ -13,14 +13,15 @@ func setCurrentNMap(nm, reset : bool = true) -> void:
 	if reset:
 		_resetMaps()
 
-func getCurrentNMap():
-	if not _exists():
-		return
-	
-	return currentNoxelMap
+func removeCurrentNmap():
+	currentNoxelMap = null
 
-var walls: PackedByteArray
+var walls: NoxelWallStorage
 var soundLevel: PackedByteArray
 var emitter: PackedByteArray
 func _resetMaps():
-	currentNoxelMap.wallBakeData
+	walls = currentNoxelMap.wallBakeData
+	var dim : Vector3i = currentNoxelMap.vGridDimensions
+	var count := dim.x * dim.y * dim.z
+	soundLevel.resize(count)
+	emitter.resize(count)
