@@ -7,11 +7,20 @@ func _exists() -> bool:
 	else:
 		return false
 
-func setCurrentNMap(nm) -> void:
+func setCurrentNMap(nm, reset : bool = true) -> void:
 	currentNoxelMap = nm
+	
+	if reset:
+		_resetMaps()
 
 func getCurrentNMap():
 	if not _exists():
 		return
 	
 	return currentNoxelMap
+
+var walls: PackedByteArray
+var soundLevel: PackedByteArray
+var emitter: PackedByteArray
+func _resetMaps():
+	currentNoxelMap.wallBakeData

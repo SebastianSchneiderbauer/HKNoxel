@@ -43,22 +43,22 @@ func bake_sound_grid(debug: bool = false) -> void:
 	for z in vGridDimensions.z: # beautiful
 		for y in vGridDimensions.y:
 			for x in vGridDimensions.x:
-				if _is_cell_occupied(vGridStartPosition + Vector3(x,y,z) * cell_size):
+				if _is_cell_occupied(vGridStartPosition + Vector3(x,y,z) * cell_size + Vector3(cell_size/2, cell_size/2, cell_size/2)):
 					wallcount += 1;
 					wallBakeData.updateWall(_indexOf(Vector3(x,y,z)), true)
-
+					
 					if debug:
-						_debug_positions.push_back(vGridStartPosition + Vector3(x,y,z) * cell_size)
-
+						_debug_positions.push_back(vGridStartPosition + Vector3(x,y,z) * cell_size + Vector3(cell_size/2, cell_size/2, cell_size/2))
+		
 		# yield periodically so the engine doesn't freeze on large grids and progress can be shown
 		bake_progress.emit(float(z + 1) / float(vGridDimensions.z))
 		if tree:
 			await tree.process_frame
-
+	
 	if debug:
 		print("DEBUG MODE: creating debug-meshes")
 		_build_debug_multimesh()
-
+	
 	# final message
 	var elapsed_usec := Time.get_ticks_usec() - start_time
 	print("finished baking: " + str(wallcount) + "/" + str(totalCount) + " (" + str(float(wallcount) / float(totalCount) * 100).substr(0, 5) + " %) cells were detected as walls in " + str(elapsed_usec / 1000.0) + " ms")
@@ -69,7 +69,7 @@ func remove_debug_visualization():
 		child.queue_free()
 		count += 1
 	if count > 0:
-		print("removed " + str(count) + " debug-meshes")
+		print("removed debug-meshes")
 const DEBUG_MESH = preload("res://addons/HKNoxel/debugMesh.tscn")
 ## Draws all debug cells in a single MultiMeshInstance3D instead of one node per cell, avoiding per-cell scene-tree overhead
 func _build_debug_multimesh() -> void:
@@ -87,6 +87,7 @@ func _build_debug_multimesh() -> void:
 	
 	var mmi := MultiMeshInstance3D.new()
 	mmi.multimesh = multimesh
+	mmi.layers = 1 << 18
 	add_child(mmi)
 	if Engine.is_editor_hint():
 		mmi.owner = get_tree().edited_scene_root
@@ -146,7 +147,7 @@ var _query_params: PhysicsShapeQueryParameters3D
 ## Sets up our wallcheck query
 func _init_bake_query() -> void:
 	_query_shape = BoxShape3D.new()
-	_query_shape.size = Vector3.ONE * cell_size
+	_query_shape.size = Vector3.ONE * cell_size * 0.95
 	
 	_query_params = PhysicsShapeQueryParameters3D.new()
 	_query_params.shape = _query_shape
