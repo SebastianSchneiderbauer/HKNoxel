@@ -55,6 +55,10 @@ func bake_sound_grid(debug: bool = false) -> void:
 		if tree:
 			await tree.process_frame
 	
+	# update global service if it is baked in the game
+	if not Engine.is_editor_hint():
+		HKNoxelManager.setCurrentNMap(self)
+	
 	if debug:
 		print("DEBUG MODE: creating debug-meshes")
 		_build_debug_multimesh()
@@ -96,6 +100,8 @@ func _build_debug_multimesh() -> void:
 		mmi.owner = owner
 func _ready() -> void:
 	HKNoxelManager.setCurrentNMap(self)
+func _exit_tree() -> void:
+	HKNoxelManager.removeCurrentNmap()
 ## Converting a global position into a id
 func _indexOf(objectPosition: Vector3) -> int:
 	if vGridDimensions == Vector3i.ZERO:
