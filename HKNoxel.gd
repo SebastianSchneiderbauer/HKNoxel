@@ -32,7 +32,6 @@ func bake_sound_grid(debug: bool = false) -> void:
 	var dimensions : AABB = _get_node_aabb(AABBProvider)
 	vGridStartPosition = dimensions.position
 	vGridDimensions = (dimensions.size / cell_size).ceil()
-	print(vGridStartPosition," ",vGridDimensions)
 	
 	# bake walls
 	_init_bake_query()
@@ -40,6 +39,8 @@ func bake_sound_grid(debug: bool = false) -> void:
 	wallBakeData = NoxelWallStorage.new(totalCount)
 	var wallcount : int
 	var tree := get_tree()
+	print("starting bake: " + str(totalCount) + " cells (" + str(vGridDimensions.x) + "x" + str(vGridDimensions.y) + "x" + str(vGridDimensions.z) + ")")
+	var last_progress_print_usec := start_time
 	for z in vGridDimensions.z: # beautiful
 		for y in vGridDimensions.y:
 			for x in vGridDimensions.x:
@@ -51,16 +52,24 @@ func bake_sound_grid(debug: bool = false) -> void:
 						_debug_positions.push_back(vGridStartPosition + Vector3(x,y,z) * cell_size + Vector3(cell_size/2, cell_size/2, cell_size/2))
 		
 		# yield periodically so the engine doesn't freeze on large grids and progress can be shown
-		bake_progress.emit(float(z + 1) / float(vGridDimensions.z))
+		var progress := float(z + 1) / float(vGridDimensions.z)
+		bake_progress.emit(progress)
+		
+		# regularly let the user know the bake is still going, without spamming every layer
+		var now_usec := Time.get_ticks_usec()
+		if now_usec - last_progress_print_usec >= 1000000 and z + 1 < vGridDimensions.z:
+			print("baking... " + str(float(progress) * 100).substr(0, 5) + "%")
+			last_progress_print_usec = now_usec
+		
 		if tree:
 			await tree.process_frame
 	
-	# update global service if it is baked in the game
+	# update global service if it is baked in the game, not engine
 	if not Engine.is_editor_hint():
 		HKNoxelManager.setCurrentNMap(self)
 	
 	if debug:
-		print("DEBUG MODE: creating debug-meshes")
+		print("DEBUG MODE: creating debug-meshes now")
 		_build_debug_multimesh()
 	
 	# final message
