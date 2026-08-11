@@ -95,7 +95,7 @@ const SOUND_FLOOR = 0.1
 func emitSound(startPosition: Vector3, decibels: int, emitterId: int):
 #region safety checks
 	# errors
-	if emitterId <= SOUND_FLOOR:
+	if emitterId < SOUND_FLOOR:
 		printerr("too quiet")
 		return
 	if _free_ids.has(emitterId):
@@ -122,10 +122,11 @@ func emitSound(startPosition: Vector3, decibels: int, emitterId: int):
 	# safety checks are done now, we can assume everything is safe (now watch me completely fuck it up)
 	soundLevel[cellIndex] = decibels
 	emitter[cellIndex] = emitterId
-	activeCellIds.append(cellIndex)
+	if not activeCellIds.has: 
+		activeCellIds.append(cellIndex)
 
 const CONFINEMENT_DEDUCTION : float = 0.4
-const CONSTANT_DEDICTION_MULTIPLIER : float = 0.95 
+const CONSTANT_DEDUCTION_MULTIPLIER : float = 0.95 
 func _physics_process(delta: float) -> void:
 	# we currently would only reach a sound-speed of 60 m/s, nowhere close to the 343 m/s of the actual speed of sound (also dependent on the cellsize)
 	# 2 options, either ignore it or simulate multiple spreads per tick (5.7 btw, fuck, just make it 6 atp.)
@@ -146,6 +147,8 @@ func simulateSound() -> void:
 		var freeNeighbourCount = neighbourCellIDs.size()
 		var currentSoundLevel = soundLevelSnapshot[cellID] # pre tick data that was not edited by another cell
 		var newSoundLevel = currentSoundLevel - (float(freeNeighbourCount) / 6) * CONFINEMENT_DEDUCTION
+		if newSoundLevel < SOUND_FLOOR: # we DO NOT have to pass on a sound that would make a cell delete itself again
+			continue
 		for neighbourCellID in neighbourCellIDs:
 			var neighbourSoundLevel = soundLevel[neighbourCellID]
 			if newSoundLevel <= neighbourSoundLevel:
@@ -153,11 +156,26 @@ func simulateSound() -> void:
 			
 			emitter[neighbourCellID] = emitterID
 			soundLevel[neighbourCellID] = newSoundLevel
+			if neighbourSoundLevel == 0: # cell was previously not active
+				cellsToActivate.append(neighbourCellID)
+		
+		# percentage decrease of each cell
+		if currentSoundLevel * CONSTANT_DEDUCTION_MULTIPLIER >= SOUND_FLOOR:
+			soundLevel[cellID] = currentSoundLevel * CONSTANT_DEDUCTION_MULTIPLIER
+		else:
+			cellsToDeactivate.append(cellID)
 		
 		# deletion logic
 		_freeQueueDetector[emitterID] = 1
 	
-	# deletion logic
+	# adding all new cells
+	for cellID in cellsToActivate: # we cannot have duplicates here, since they are not inserted into cellsToActivate
+		activeCellIds.append(cellID)
+	# removin deleted cells
+	for cellID in cellsToDeactivate:
+		activeCellIds.erase(cellID) # theoredicly a bottleneck
+	
+	# deletion logic for emitterIds
 	var stillPending: PackedByteArray = []
 	for queuedId in _freeQueue:
 		if _freeQueueDetector[queuedId] == 0:
