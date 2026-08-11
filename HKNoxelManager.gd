@@ -15,7 +15,7 @@ func removeCurrentNmap():
 	currentNoxelMap = null
 
 var walls: NoxelWallStorage
-var soundLevel: PackedByteArray
+var soundLevel: PackedFloat32Array
 var emitter: PackedByteArray
 var dimensions: Vector3i
 
@@ -30,8 +30,10 @@ func _resetMaps():
 	walls = currentNoxelMap.wallBakeData
 	dimensions = currentNoxelMap.vGridDimensions
 	cellCount = dimensions.x * dimensions.y * dimensions.z
-	soundLevel.resize(cellCount) # resize -> everything is 0
+	soundLevel.resize(cellCount)
+	soundLevel.fill(0) # theoredicly resize already does this, however not if the size is the exact same
 	emitter.resize(cellCount)
+	soundLevel.fill(0) # same as above
 	gridStartPosition = currentNoxelMap.vGridStartPosition
 	cellSize = currentNoxelMap.cell_size
 func _indexOf(objectPosition: Vector3) -> int: # ported from the Noxel
@@ -42,6 +44,9 @@ func _indexOf(objectPosition: Vector3) -> int: # ported from the Noxel
 # registration for sound emitting
 var _free_ids: Array[int] = []
 var _active_sources: Array[Node] = []
+var _freeQueue: PackedByteArray = []
+var _freeQueueDetector: PackedByteArray
+
 func _ready() -> void:
 	_active_sources.resize(256) # hardcoding is fine here for once
 	for i in 256:
@@ -54,8 +59,8 @@ func register_source(source: Node) -> int:
 	_active_sources[id] = source
 	return id
 func free_source(id: int) -> void:
-	_active_sources[id] = null
-	_free_ids.append(id)
+	if not _freeQueue.has(id): 
+		_freeQueue.append(id) # we stage for deletion, since sound of that emitter could still be active and reassigned to other emitters in the worst case
 func get_source(id: int) -> Node:
 	if id < 0 or id >= _active_sources.size():
 		return null
@@ -85,12 +90,13 @@ func _getFreeNeighbourIndexes(cellIndex: int) -> Array[int]: # this is a abomina
 	return result
 func _checkCellIndex(cellIndex: int) -> bool:
 	return cellIndex >= 0 and cellIndex < cellCount and not walls.isWall(cellIndex)
+const SOUND_FLOOR = 0.1
 ## Used for emitting a sound at a position. Decibels is a integer that can take values storable in an unsigned byte. Fails if the emitterId is not valid or the position is outside of the baked NoxelMap
 func emitSound(startPosition: Vector3, decibels: int, emitterId: int):
 #region safety checks
 	# errors
-	if emitterId < 0 or emitterId >= 256:
-		printerr("emitterID out of range")
+	if emitterId <= SOUND_FLOOR:
+		printerr("too quiet")
 		return
 	if _free_ids.has(emitterId):
 		printerr("emitterID not registered")
@@ -126,11 +132,19 @@ func _physics_process(delta: float) -> void:
 	if Input.is_action_just_pressed("ctrl"):
 		simulateSound()
 func simulateSound() -> void:
+	# reset freeing detector Array
+	_freeQueueDetector.resize(256)
+	_freeQueueDetector.fill(0)
+	
+	var soundLevelSnapshot: PackedFloat32Array = soundLevel.duplicate()
+	var cellsToActivate: Array[int]
+	var cellsToDeactivate: Array[int]
 	for cellID in activeCellIds:
+		# spreading logic
 		var emitterID = emitter[cellID]
 		var neighbourCellIDs = _getFreeNeighbourIndexes(cellID)
 		var freeNeighbourCount = neighbourCellIDs.size()
-		var currentSoundLevel = soundLevel[cellID]
+		var currentSoundLevel = soundLevelSnapshot[cellID] # pre tick data that was not edited by another cell
 		var newSoundLevel = currentSoundLevel - (float(freeNeighbourCount) / 6) * CONFINEMENT_DEDUCTION
 		for neighbourCellID in neighbourCellIDs:
 			var neighbourSoundLevel = soundLevel[neighbourCellID]
@@ -139,3 +153,16 @@ func simulateSound() -> void:
 			
 			emitter[neighbourCellID] = emitterID
 			soundLevel[neighbourCellID] = newSoundLevel
+		
+		# deletion logic
+		_freeQueueDetector[emitterID] = 1
+	
+	# deletion logic
+	var stillPending: PackedByteArray = []
+	for queuedId in _freeQueue:
+		if _freeQueueDetector[queuedId] == 0:
+			_active_sources[queuedId] = null
+			_free_ids.append(queuedId)
+		else:
+			stillPending.append(queuedId)
+	_freeQueue = stillPending
