@@ -19,6 +19,8 @@ var soundLevel: PackedByteArray
 var emitter: PackedByteArray
 var dimensions: Vector3i
 
+var activeCellIds: Array[int]
+
 var gridStartPosition: Vector3
 var cellCount: int
 var cellSize: float
@@ -28,7 +30,7 @@ func _resetMaps():
 	walls = currentNoxelMap.wallBakeData
 	dimensions = currentNoxelMap.vGridDimensions
 	cellCount = dimensions.x * dimensions.y * dimensions.z
-	soundLevel.resize(cellCount)
+	soundLevel.resize(cellCount) # resize -> everything is 0
 	emitter.resize(cellCount)
 	gridStartPosition = currentNoxelMap.vGridStartPosition
 	cellSize = currentNoxelMap.cell_size
@@ -59,22 +61,57 @@ func get_source(id: int) -> Node:
 		return null
 	return _active_sources[id]
 
-## Used for emitting a sound at a position. Fails if the emitterId is not valid or the position is outside of the baked NoxelMap
+func _getNeighbourIndexes(cellIndex: int) -> Array[int]: # this is a abomination and should be banished into the dephs of hell
+	# formula x + y * dim.x + z * dim.x * dim.y
+	var result : Array[int]
+	# x
+	if _checkCellIndex(cellIndex + 1):
+		result.append(cellIndex + 1)
+	if _checkCellIndex(cellIndex - 1):
+		result.append(cellIndex - 1)
+	# y
+	if _checkCellIndex(cellIndex + 1 * dimensions.x):
+		result.append(cellIndex + 1 * dimensions.x)
+	if _checkCellIndex(cellIndex - 1 * dimensions.x):
+		result.append(cellIndex - 1 * dimensions.x)
+	# z
+	if _checkCellIndex(cellIndex + 1 * dimensions.x * dimensions.y):
+		result.append(cellIndex + 1 * dimensions.x * dimensions.y)
+	if _checkCellIndex(cellIndex - 1 * dimensions.x * dimensions.y):
+		result.append(cellIndex - 1 * dimensions.x * dimensions.y)
+	
+	return result
+func _checkCellIndex(cellIndex: int) -> bool:
+	return cellIndex >= 0 and cellIndex < cellCount
+## Used for emitting a sound at a position. Decibels is a integer that can take values storable in an unsigned byte. Fails if the emitterId is not valid or the position is outside of the baked NoxelMap
 func emitSound(startPosition: Vector3, decibels: int, emitterId: int):
+#region safety checks
+	# errors
 	if emitterId < 0 or emitterId >= 256:
 		printerr("emitterID out of range")
 		return
 	if _free_ids.has(emitterId):
 		printerr("emitterID not registered")
 		return
-	var cellID = _indexOf(startPosition)
-	if walls.isWall(cellID):
+	var cellIndex := _indexOf(startPosition)
+	if cellIndex >= cellCount:
+		printerr("sound is out of this world") # holy
+		return
+	if walls.isWall(cellIndex):
 		printerr("sound cannot be started in wall")
 		return
 	
+	# warning(s)
 	if decibels < 0 or decibels > 255:
 		var snapvalue := clamp(decibels, 0, 255)
 		print("WARNING: snapped decibel value of " + str(decibels) + " to " + str(snapvalue))
 		decibels = snapvalue
 	
-	
+	var cellsCurrentSound = soundLevel[cellIndex]
+	if cellsCurrentSound > decibels:
+		return # no need in puttin a sound here that is weaker than the existing sound
+#endregion
+	# safety checks are done now, we can assume everything is safe (now watch me completely fuck it up)
+	soundLevel[cellIndex] = decibels
+	emitter[cellIndex] = emitterId
+	activeCellIds.append(cellIndex)
