@@ -7,6 +7,7 @@ func _exists() -> bool:
 	else:
 		return false
 func setCurrentNMap(nm, reset : bool = true) -> void:
+	print("reveived NOXELMAP update. update: " + str(reset))
 	currentNoxelMap = nm
 	
 	if reset:
@@ -28,7 +29,9 @@ var cellSize: float
 # so everythign works together nicely
 func _resetMaps():
 	walls = currentNoxelMap.wallBakeData
+	print(walls._cellCount)
 	dimensions = currentNoxelMap.vGridDimensions
+	print(dimensions)
 	cellCount = dimensions.x * dimensions.y * dimensions.z
 	soundLevel.resize(cellCount)
 	soundLevel.fill(0) # theoredicly resize already does this, however not if the size is the exact same
@@ -40,6 +43,19 @@ func _indexOf(objectPosition: Vector3) -> int: # ported from the Noxel
 	var relativePosition: Vector3 = objectPosition - gridStartPosition
 	var voxelPosition: Vector3 = (relativePosition / cellSize).round()
 	return int(voxelPosition.x + voxelPosition.y * dimensions.x + voxelPosition.z * dimensions.x * dimensions.y)
+func _positionOf(index: int) -> Vector3:
+	if dimensions == Vector3i.ZERO:
+		printerr("cannot get position if dimensions were not specified")
+		return Vector3.ZERO
+	
+	var width := dimensions.x
+	var height := dimensions.y
+	
+	var x := index % width
+	var y := (index / width) % height
+	var z := index / (width * height)
+	
+	return gridStartPosition + Vector3(x, y, z) * cellSize
 
 # registration for sound emitting
 var _free_ids: Array[int] = []
@@ -103,7 +119,7 @@ func emitSound(startPosition: Vector3, decibels: int, emitterId: int):
 		return
 	var cellIndex := _indexOf(startPosition)
 	if cellIndex < 0 or cellIndex >= cellCount:
-		printerr("sound is out of this world") # holy wording
+		printerr("sound is out of this world: " + str(cellIndex) + " / " + str(cellCount)) # holy wording
 		return
 	if walls.isWall(cellIndex):
 		printerr("sound cannot be started in wall")
@@ -127,12 +143,16 @@ func emitSound(startPosition: Vector3, decibels: int, emitterId: int):
 
 const CONFINEMENT_DEDUCTION : float = 0.4
 const CONSTANT_DEDUCTION_MULTIPLIER : float = 0.95 
+var TESTID
 func _physics_process(delta: float) -> void:
 	# we currently would only reach a sound-speed of 60 m/s, nowhere close to the 343 m/s of the actual speed of sound (also dependent on the cellsize)
 	# 2 options, either ignore it or simulate multiple spreads per tick (5.7 btw, fuck, just make it 6 atp.)
 	if Input.is_action_just_pressed("ctrl"):
-		simulateSound()
-func simulateSound() -> void:
+		print("starting sim")
+		TESTID = register_source(self)
+		emitSound(get_tree().get_first_node_in_group("player").global_position, 5, TESTID)
+		simulateSound(true)
+func simulateSound(generateDebug: bool = false) -> void:
 	# reset freeing detector Array
 	_freeQueueDetector.resize(256)
 	_freeQueueDetector.fill(0)
@@ -167,13 +187,17 @@ func simulateSound() -> void:
 		
 		# deletion logic
 		_freeQueueDetector[emitterID] = 1
+	print("went over " + str(activeCellIds.size()) + " cells")
 	
 	# adding all new cells
 	for cellID in cellsToActivate: # we cannot have duplicates here, since they are not inserted into cellsToActivate
 		activeCellIds.append(cellID)
+	print("added over " + str(cellsToActivate.size()) + " active cells")
+	
 	# removin deleted cells
 	for cellID in cellsToDeactivate:
 		activeCellIds.erase(cellID) # theoredicly a bottleneck
+	print("removed over " + str(cellsToDeactivate.size()) + " active cells")
 	
 	# deletion logic for emitterIds
 	var stillPending: PackedByteArray = []
@@ -184,3 +208,26 @@ func simulateSound() -> void:
 		else:
 			stillPending.append(queuedId)
 	_freeQueue = stillPending
+	
+	# if we want debugging visuals, create them
+	if generateDebug:
+		print("now generating debug")
+		debug_visualize_active_cells
+
+# debugging stuff, not needed afterwards
+var _debug_labels: Array[Label3D] = []
+func debug_visualize_active_cells() -> void:
+	_clear_debug_labels()
+	for cellID in activeCellIds:
+		var label := Label3D.new()
+		label.text = "%.1f" % soundLevel[cellID]
+		label.position = _positionOf(cellID)  # whatever your existing id->world helper is
+		label.pixel_size = 0.01  # tune for readability at your cell scale
+		label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		add_child(label)
+		_debug_labels.append(label)
+
+func _clear_debug_labels() -> void:
+	for label in _debug_labels:
+		label.queue_free()
+	_debug_labels.clear()

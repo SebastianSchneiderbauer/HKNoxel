@@ -11,12 +11,12 @@ extends Node3D
 @export var AABBProvider: Node3D
 @export_category("DO NOT TOUCH")
 @export var wallBakeData : NoxelWallStorage
+@export var vGridDimensions: Vector3i # the dimensions of our voxelgrid. exported so a bake done in the editor (or baked into a packed/saved scene) survives reload
 
 signal bake_progress(progress: float)
 signal bake_complete()
 
 var vGridStartPosition: Vector3
-var vGridDimensions: Vector3i # the dimensions of our voxelgrid
 var _debug_positions: PackedVector3Array
 func bake_sound_grid(debug: bool = false) -> void:
 	# init
@@ -64,10 +64,6 @@ func bake_sound_grid(debug: bool = false) -> void:
 		if tree:
 			await tree.process_frame
 	
-	# update global service if it is baked in the game, not engine
-	if not Engine.is_editor_hint():
-		HKNoxelManager.setCurrentNMap(self)
-	
 	if debug:
 		print("DEBUG MODE: creating debug-meshes now")
 		_build_debug_multimesh()
@@ -108,7 +104,7 @@ func _build_debug_multimesh() -> void:
 		# inherit our own owner so PackedScene.pack() keeps this node when the map is compiled at runtime
 		mmi.owner = owner
 func _ready() -> void:
-	HKNoxelManager.setCurrentNMap(self)
+	HKNoxelManager.setCurrentNMap(self, vGridDimensions != Vector3i.ZERO)
 func _exit_tree() -> void:
 	HKNoxelManager.removeCurrentNmap()
 ## Converting a global position into a id
