@@ -160,6 +160,8 @@ func _physics_process(delta: float) -> void:
 		
 		simulateSound(true)
 func simulateSound(generateDebug: bool = false) -> void:
+	var debug_start_usec := Time.get_ticks_usec() if generateDebug else 0
+
 	# reset freeing detector Array
 	_freeQueueDetector.resize(256)
 	_freeQueueDetector.fill(0)
@@ -219,6 +221,8 @@ func simulateSound(generateDebug: bool = false) -> void:
 	
 	# if we want debugging visuals, create them
 	if generateDebug:
+		var elapsed_usec := Time.get_ticks_usec() - debug_start_usec
+		print("simulateSound took " + str(elapsed_usec / 1000.0) + " ms (excluding debug label placement)")
 		print("now generating debug")
 		debug_visualize_active_cells()
 
