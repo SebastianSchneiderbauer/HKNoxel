@@ -138,8 +138,9 @@ func emitSound(startPosition: Vector3, decibels: int, emitterId: int):
 	# safety checks are done now, we can assume everything is safe (now watch me completely fuck it up)
 	soundLevel[cellIndex] = decibels
 	emitter[cellIndex] = emitterId
-	if not activeCellIds.has: 
+	if not activeCellIds.has(cellIndex): 
 		activeCellIds.append(cellIndex)
+		print("added sound as new active cell")
 
 const CONFINEMENT_DEDUCTION : float = 0.4
 const CONSTANT_DEDUCTION_MULTIPLIER : float = 0.95 
@@ -147,10 +148,13 @@ var TESTID
 func _physics_process(delta: float) -> void:
 	# we currently would only reach a sound-speed of 60 m/s, nowhere close to the 343 m/s of the actual speed of sound (also dependent on the cellsize)
 	# 2 options, either ignore it or simulate multiple spreads per tick (5.7 btw, fuck, just make it 6 atp.)
-	if Input.is_action_just_pressed("ctrl"):
-		print("starting sim")
+	if Input.is_action_just_pressed("shift"):
+		print("Prepping sim")
 		TESTID = register_source(self)
 		emitSound(get_tree().get_first_node_in_group("player").global_position, 5, TESTID)
+	if Input.is_action_just_pressed("ctrl"):
+		print("continuing sim")
+		
 		simulateSound(true)
 func simulateSound(generateDebug: bool = false) -> void:
 	# reset freeing detector Array
