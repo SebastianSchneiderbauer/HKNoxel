@@ -12,11 +12,11 @@ extends Node3D
 @export_category("DO NOT TOUCH")
 @export var wallBakeData : NoxelWallStorage
 @export var vGridDimensions: Vector3i # the dimensions of our voxelgrid. exported so a bake done in the editor (or baked into a packed/saved scene) survives reload
+@export var vGridStartPosition: Vector3 # same reasoning as vGridDimensions - the manager reads this for its index/position math
 
 signal bake_progress(progress: float)
 signal bake_complete()
 
-var vGridStartPosition: Vector3
 var _debug_positions: PackedVector3Array
 func bake_sound_grid(debug: bool = false) -> void:
 	# init
