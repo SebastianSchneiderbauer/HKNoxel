@@ -172,6 +172,7 @@ func simulateSound(generateDebug: bool = false) -> void:
 		var currentSoundLevel = soundLevelSnapshot[cellID] # pre tick data that was not edited by another cell
 		var newSoundLevel = currentSoundLevel - (float(freeNeighbourCount) / 6) * CONFINEMENT_DEDUCTION
 		if newSoundLevel < SOUND_FLOOR: # we DO NOT have to pass on a sound that would make a cell delete itself again
+			cellsToDeactivate.append(cellID)
 			continue
 		for neighbourCellID in neighbourCellIDs:
 			var neighbourSoundLevel = soundLevel[neighbourCellID]
@@ -216,7 +217,7 @@ func simulateSound(generateDebug: bool = false) -> void:
 	# if we want debugging visuals, create them
 	if generateDebug:
 		print("now generating debug")
-		debug_visualize_active_cells
+		debug_visualize_active_cells()
 
 # debugging stuff, not needed afterwards
 var _debug_labels: Array[Label3D] = []
@@ -226,11 +227,10 @@ func debug_visualize_active_cells() -> void:
 		var label := Label3D.new()
 		label.text = "%.1f" % soundLevel[cellID]
 		label.position = _positionOf(cellID)  # whatever your existing id->world helper is
-		label.pixel_size = 0.01  # tune for readability at your cell scale
+		#label.pixel_size = 0.01  # tune for readability at your cell scale
 		label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 		add_child(label)
 		_debug_labels.append(label)
-
 func _clear_debug_labels() -> void:
 	for label in _debug_labels:
 		label.queue_free()
