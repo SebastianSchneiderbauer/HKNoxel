@@ -41,7 +41,7 @@ func _resetMaps():
 	cellSize = currentNoxelMap.cell_size
 func _indexOf(objectPosition: Vector3) -> int: # ported from the Noxel
 	var relativePosition: Vector3 = objectPosition - gridStartPosition
-	var voxelPosition: Vector3 = (relativePosition / cellSize).round()
+	var voxelPosition: Vector3 = (relativePosition / cellSize).floor()
 	return int(voxelPosition.x + voxelPosition.y * dimensions.x + voxelPosition.z * dimensions.x * dimensions.y)
 func _positionOf(index: int) -> Vector3:
 	if dimensions == Vector3i.ZERO:
@@ -85,16 +85,19 @@ func get_source(id: int) -> Node:
 func _getFreeNeighbourIndexes(cellIndex: int) -> Array[int]: # this is a abomination and should be banished into the dephs of hell
 	# formula x + y * dim.x + z * dim.x * dim.y
 	var result : Array[int]
+	var x := cellIndex % dimensions.x
+	var y := (cellIndex / dimensions.x) % dimensions.y
+	
 	# x
-	if _checkCellIndex(cellIndex + 1):
+	if x + 1 < dimensions.x and _checkCellIndex(cellIndex + 1):
 		result.append(cellIndex + 1)
-	if _checkCellIndex(cellIndex - 1):
+	if x - 1 >= 0 and _checkCellIndex(cellIndex - 1):
 		result.append(cellIndex - 1)
 	
 	# y
-	if _checkCellIndex(cellIndex + 1 * dimensions.x):
+	if y + 1 < dimensions.y and _checkCellIndex(cellIndex + 1 * dimensions.x):
 		result.append(cellIndex + 1 * dimensions.x)
-	if _checkCellIndex(cellIndex - 1 * dimensions.x):
+	if y - 1 >= 0 and _checkCellIndex(cellIndex - 1 * dimensions.x):
 		result.append(cellIndex - 1 * dimensions.x)
 	
 	# z
@@ -221,12 +224,12 @@ func simulateSound(generateDebug: bool = false) -> void:
 
 # debugging stuff, not needed afterwards
 var _debug_labels: Array[Label3D] = []
-func debug_visualize_active_cells() -> void:
+func debug_visualize_active_cells() -> void:#
 	_clear_debug_labels()
 	for cellID in activeCellIds:
 		var label := Label3D.new()
 		label.text = "%.1f" % soundLevel[cellID]
-		label.position = _positionOf(cellID)  # whatever your existing id->world helper is
+		label.position = _positionOf(cellID) + Vector3(cellSize/2, cellSize/2, cellSize/2)
 		#label.pixel_size = 0.01  # tune for readability at your cell scale
 		label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 		add_child(label)

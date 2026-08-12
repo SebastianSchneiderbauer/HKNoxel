@@ -2,8 +2,8 @@ class_name NoxelWallStorage
 
 extends Resource
 
-var _wallInformation : PackedByteArray
-var _cellCount: int
+@export var _wallInformation : PackedByteArray
+@export var _cellCount: int
 
 func _init(arraysize: int = 0) -> void: # because the engine initializes with no parameters, we dont want it resetting our baking
 	if arraysize > 0:

@@ -46,7 +46,9 @@ func bake_sound_grid(debug: bool = false) -> void:
 			for x in vGridDimensions.x:
 				if _is_cell_occupied(vGridStartPosition + Vector3(x,y,z) * cell_size + Vector3(cell_size/2, cell_size/2, cell_size/2)):
 					wallcount += 1;
-					wallBakeData.updateWall(_indexOf(Vector3(x,y,z)), true)
+					# _indexOf() expects a WORLD position, need some trickery here
+					var wallIndex := int(x + y * vGridDimensions.x + z * vGridDimensions.x * vGridDimensions.y)
+					wallBakeData.updateWall(wallIndex, true)
 					
 					if debug:
 						_debug_positions.push_back(vGridStartPosition + Vector3(x,y,z) * cell_size + Vector3(cell_size/2, cell_size/2, cell_size/2))
@@ -114,7 +116,7 @@ func _indexOf(objectPosition: Vector3) -> int:
 		return -1
 	
 	var relativePosition: Vector3 = objectPosition - vGridStartPosition
-	var voxelPosition: Vector3 = (relativePosition / cell_size).round()
+	var voxelPosition: Vector3 = (relativePosition / cell_size).floor()
 	return int(voxelPosition.x + voxelPosition.y * vGridDimensions.x + voxelPosition.z * vGridDimensions.x * vGridDimensions.y)
 ## Converts a id of a Noxel chunk into a worldposition. Keep in mind this always returns the center of said chunk
 func _positionOf(index: int) -> Vector3:
