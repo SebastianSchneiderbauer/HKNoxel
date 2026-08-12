@@ -151,7 +151,7 @@ var TESTID
 func _physics_process(delta: float) -> void:
 	# we currently would only reach a sound-speed of 60 m/s, nowhere close to the 343 m/s of the actual speed of sound (also dependent on the cellsize)
 	# 2 options, either ignore it or simulate multiple spreads per tick (5.7 btw, fuck, just make it 6 atp.)
-	if Input.is_action_just_pressed("shift"):
+	if Input.is_action_just_pressed("enter"):
 		print("Prepping sim")
 		TESTID = register_source(self)
 		emitSound(get_tree().get_first_node_in_group("player").global_position, 5, TESTID)
