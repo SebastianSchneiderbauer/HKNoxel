@@ -1,5 +1,5 @@
 extends Node
-
+# NOTE: these comments looks HELLA ai generated, but im lwk too lazy, so fuck you
 var currentNoxelMap
 func _exists() -> bool:
 	if currentNoxelMap:
@@ -141,7 +141,7 @@ func emitSound(startPosition: Vector3, decibels: int, emitterId: int):
 	# safety checks are done now, we can assume everything is safe (now watch me completely fuck it up)
 	soundLevel[cellIndex] = decibels
 	emitter[cellIndex] = emitterId
-	if not activeCellIds.has(cellIndex): 
+	if not activeCellIds.has(cellIndex):
 		activeCellIds.append(cellIndex)
 		print("added sound as new active cell")
 
@@ -161,12 +161,16 @@ func _physics_process(delta: float) -> void:
 		simulateSound(true)
 func simulateSound(generateDebug: bool = false) -> void:
 	var debug_start_usec := Time.get_ticks_usec() if generateDebug else 0
-
+	
 	# reset freeing detector Array
 	_freeQueueDetector.resize(256)
 	_freeQueueDetector.fill(0)
 	
-	var soundLevelSnapshot: PackedFloat32Array = soundLevel.duplicate()
+	# only the currently active cells can change this tick, so we only need their pre-tick values,
+	# not a copy of the whole (potentially huge) grid
+	var soundLevelSnapshot: Dictionary = {}
+	for cellID in activeCellIds:
+		soundLevelSnapshot[cellID] = soundLevel[cellID]
 	var cellsToActivate: Array[int]
 	var cellsToDeactivate: Array[int]
 	for cellID in activeCellIds:
@@ -197,17 +201,20 @@ func simulateSound(generateDebug: bool = false) -> void:
 		
 		# deletion logic
 		_freeQueueDetector[emitterID] = 1
-	print("went over " + str(activeCellIds.size()) + " cells")
+	if generateDebug:
+		print("went over " + str(activeCellIds.size()) + " cells")
 	
 	# adding all new cells
 	for cellID in cellsToActivate: # we cannot have duplicates here, since they are not inserted into cellsToActivate
 		activeCellIds.append(cellID)
-	print("added over " + str(cellsToActivate.size()) + " active cells")
+	if generateDebug:
+		print("added over " + str(cellsToActivate.size()) + " active cells")
 	
 	# removin deleted cells
 	for cellID in cellsToDeactivate:
 		activeCellIds.erase(cellID) # theoredicly a bottleneck
-	print("removed over " + str(cellsToDeactivate.size()) + " active cells")
+	if generateDebug:
+		print("removed over " + str(cellsToDeactivate.size()) + " active cells")
 	
 	# deletion logic for emitterIds
 	var stillPending: PackedByteArray = []
