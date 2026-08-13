@@ -114,7 +114,7 @@ const SOUND_FLOOR = 0.1
 func emitSound(startPosition: Vector3, decibels: int, emitterId: int):
 #region safety checks
 	# errors
-	if emitterId < SOUND_FLOOR:
+	if decibels < SOUND_FLOOR:
 		printerr("too quiet")
 		return
 	if _free_ids.has(emitterId):
