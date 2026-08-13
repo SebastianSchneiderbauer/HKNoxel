@@ -161,10 +161,10 @@ func _physics_process(delta: float) -> void:
 	# 2 options, either ignore it or simulate multiple spreads per tick (5.7 btw, fuck, just make it 6 atp.)
 	if Input.is_action_just_pressed("enter"):
 		print("Prepping sim")
-		TESTID = register_source(self)
+		if not TESTID:
+			TESTID = register_source(self)
 		emitSound(get_tree().get_first_node_in_group("player").global_position + Vector3.UP, 5, TESTID)
-	if Input.is_action_just_pressed("ctrl"):
-		simulateSound(true)
+	simulateSound(false)
 func simulateSound(generateDebug: bool = false) -> void:
 	var debug_start_usec := Time.get_ticks_usec() if generateDebug else 0
 	
@@ -221,7 +221,8 @@ func simulateSound(generateDebug: bool = false) -> void:
 		print("added over " + str(cellsToActivate.size()) + " active cells")
 	
 	# removin deleted cells
-	print(cellsToDeactivate.size())
+	if generateDebug:
+		print(cellsToDeactivate.size())
 	for cellID in cellsToDeactivate:
 		activeCellIds.erase(cellID) # theoredicly a bottleneck, not that much should be deleted at once however
 	if generateDebug:
@@ -235,7 +236,10 @@ func simulateSound(generateDebug: bool = false) -> void:
 			_free_ids.append(queuedId)
 		else:
 			stillPending.append(queuedId)
+	if Input.is_action_just_pressed("c"):
+		print(_freeQueueDetector)
 	_freeQueue = stillPending
+
 	
 	# if we want debugging visuals, create them
 	if generateDebug:

@@ -5,6 +5,9 @@ extends Node3D
 @onready var mesh_green: MeshInstance3D = $meshContainer/meshGreen
 @onready var info: Label3D = $meshContainer/info
 
+func _ready():
+	rotation = Vector3(0,0,0) # just a safety thing, could be removed
+
 func _physics_process(delta: float) -> void:
 	var cellSize := HKNoxelManager.cellSize
 	meshContainer.scale = Vector3(cellSize, cellSize, cellSize)
