@@ -1,0 +1,19 @@
+[gd_scene format=3 uid="uid://c7wa27aji0apv"]
+
+[ext_resource type="Script" uid="uid://ct4x32ftwmv7l" path="res://addons/HKNoxel/NoxelDetector.gd" id="1_uc7yx"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_bih38"]
+transparency = 1
+albedo_color = Color(1, 0, 0, 0.11764706)
+
+[sub_resource type="BoxMesh" id="BoxMesh_xenx7"]
+material = SubResource("StandardMaterial3D_bih38")
+
+[node name="NoxelDetector" type="Node3D" unique_id=1385838863]
+script = ExtResource("1_uc7yx")
+
+[node name="meshContainer" type="Node3D" parent="." unique_id=708165437]
+
+[node name="meshRed" type="MeshInstance3D" parent="meshContainer" unique_id=1862506618]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.5, 0.5, 0.5)
+mesh = SubResource("BoxMesh_xenx7")

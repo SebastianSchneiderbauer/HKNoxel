@@ -145,6 +145,14 @@ func emitSound(startPosition: Vector3, decibels: int, emitterId: int):
 		activeCellIds.append(cellIndex)
 		print("added sound as new active cell")
 
+## Lets you check the sound level of a cell, as well as the emitters ID, auto-returns Vector2.ZERO on bad input
+func getNoxelInformation(wantedPosition: Vector3) -> Vector2 :
+	var posIndex := _indexOf(wantedPosition)
+	if not _checkCellIndex(posIndex):
+		return Vector2.ZERO
+	
+	return Vector2(soundLevel[posIndex], emitter[posIndex])
+
 const CONFINEMENT_DEDUCTION : float = 0.4
 const CONSTANT_DEDUCTION_MULTIPLIER : float = 0.95 
 var TESTID
@@ -154,11 +162,8 @@ func _physics_process(delta: float) -> void:
 	if Input.is_action_just_pressed("enter"):
 		print("Prepping sim")
 		TESTID = register_source(self)
-		emitSound(get_tree().get_first_node_in_group("player").global_position, 5, TESTID)
-	if Input.is_action_just_pressed("ctrl"):
-		print("continuing sim")
-		
-		simulateSound(false)
+		emitSound(get_tree().get_first_node_in_group("player").global_position + Vector3.UP, 5, TESTID)
+	simulateSound(false)
 func simulateSound(generateDebug: bool = false) -> void:
 	var debug_start_usec := Time.get_ticks_usec() if generateDebug else 0
 	
