@@ -36,7 +36,7 @@ func _resetMaps():
 	soundLevel.resize(cellCount)
 	soundLevel.fill(0) # theoredicly resize already does this, however not if the size is the exact same
 	emitter.resize(cellCount)
-	soundLevel.fill(0) # same as above
+	emitter.fill(0) # same as above
 	gridStartPosition = currentNoxelMap.vGridStartPosition
 	cellSize = currentNoxelMap.cell_size
 func _indexOf(objectPosition: Vector3) -> int: # ported from the Noxel
@@ -158,7 +158,7 @@ func _physics_process(delta: float) -> void:
 	if Input.is_action_just_pressed("ctrl"):
 		print("continuing sim")
 		
-		simulateSound(true)
+		simulateSound(false)
 func simulateSound(generateDebug: bool = false) -> void:
 	var debug_start_usec := Time.get_ticks_usec() if generateDebug else 0
 	
@@ -211,8 +211,9 @@ func simulateSound(generateDebug: bool = false) -> void:
 		print("added over " + str(cellsToActivate.size()) + " active cells")
 	
 	# removin deleted cells
+	print(cellsToDeactivate.size())
 	for cellID in cellsToDeactivate:
-		activeCellIds.erase(cellID) # theoredicly a bottleneck
+		activeCellIds.erase(cellID) # theoredicly a bottleneck, not that much should be deleted at once however
 	if generateDebug:
 		print("removed over " + str(cellsToDeactivate.size()) + " active cells")
 	
