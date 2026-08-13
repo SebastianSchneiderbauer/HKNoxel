@@ -163,7 +163,8 @@ func _physics_process(delta: float) -> void:
 		print("Prepping sim")
 		TESTID = register_source(self)
 		emitSound(get_tree().get_first_node_in_group("player").global_position + Vector3.UP, 5, TESTID)
-	simulateSound(false)
+	if Input.is_action_just_pressed("ctrl"):
+		simulateSound(true)
 func simulateSound(generateDebug: bool = false) -> void:
 	var debug_start_usec := Time.get_ticks_usec() if generateDebug else 0
 	
@@ -186,6 +187,8 @@ func simulateSound(generateDebug: bool = false) -> void:
 		var currentSoundLevel = soundLevelSnapshot[cellID] # pre tick data that was not edited by another cell
 		var newSoundLevel = currentSoundLevel - (float(freeNeighbourCount) / 6) * CONFINEMENT_DEDUCTION
 		if newSoundLevel < SOUND_FLOOR: # we DO NOT have to pass on a sound that would make a cell delete itself again
+			soundLevel[cellID] = 0
+			emitter[cellID] = 0
 			cellsToDeactivate.append(cellID)
 			continue
 		for neighbourCellID in neighbourCellIDs:
@@ -202,6 +205,8 @@ func simulateSound(generateDebug: bool = false) -> void:
 		if currentSoundLevel * CONSTANT_DEDUCTION_MULTIPLIER >= SOUND_FLOOR:
 			soundLevel[cellID] = currentSoundLevel * CONSTANT_DEDUCTION_MULTIPLIER
 		else:
+			soundLevel[cellID] = 0
+			emitter[cellID] = 0
 			cellsToDeactivate.append(cellID)
 		
 		# deletion logic

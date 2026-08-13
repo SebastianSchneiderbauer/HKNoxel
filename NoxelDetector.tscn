@@ -9,6 +9,13 @@ albedo_color = Color(1, 0, 0, 0.11764706)
 [sub_resource type="BoxMesh" id="BoxMesh_xenx7"]
 material = SubResource("StandardMaterial3D_bih38")
 
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_uc7yx"]
+transparency = 1
+albedo_color = Color(0, 1, 0, 0.11764706)
+
+[sub_resource type="BoxMesh" id="BoxMesh_bih38"]
+material = SubResource("StandardMaterial3D_uc7yx")
+
 [node name="NoxelDetector" type="Node3D" unique_id=1385838863]
 script = ExtResource("1_uc7yx")
 
@@ -17,3 +24,13 @@ script = ExtResource("1_uc7yx")
 [node name="meshRed" type="MeshInstance3D" parent="meshContainer" unique_id=1862506618]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.5, 0.5, 0.5)
 mesh = SubResource("BoxMesh_xenx7")
+
+[node name="meshGreen" type="MeshInstance3D" parent="meshContainer" unique_id=1419573739]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.5, 0.5, 0.5)
+mesh = SubResource("BoxMesh_bih38")
+
+[node name="info" type="Label3D" parent="meshContainer" unique_id=1036669741]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.5, 0.5, 0.5)
+billboard = 1
+text = "SOMETHING
+IS WRONG"
