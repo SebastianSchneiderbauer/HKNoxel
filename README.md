@@ -6,3 +6,5 @@ a godot addon which adds the capability for voxel based noise propagation
 
 - intended to be used for making enemies react to sound you emit (footsteps, gunshots, etc.)
 - not intended for actually playing sounds, you can certainly try though...
+
+HELLA non performent rn, since i still need to switch the removing of empty Noxels from array.erase(ID) to something that does not suck your pc dry of resources
