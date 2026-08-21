@@ -227,6 +227,9 @@ func simulateSound(generateDebug: bool = false) -> void:
 	# removin deleted cells
 	if generateDebug:
 		print(cellsToDeactivate.size())
+	if cellsToDeactivate.size() != 0:
+		cellsToDeactivate.sort()
+		cellsToDeactivate.reverse()
 	for cellIndex in cellsToDeactivate:
 		# swap delete for performence
 		var lastIndex = activeCellIds.size() - 1
