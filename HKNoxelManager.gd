@@ -156,17 +156,20 @@ func getNoxelInformation(wantedPosition: Vector3) -> Vector2 :
 const CONFINEMENT_DEDUCTION : float = 0.4
 const CONSTANT_DEDUCTION_MULTIPLIER : float = 0.95 
 var TESTID
+var _isDebug : bool = false
+func setDebugMode(debug: bool):
+	_isDebug = debug
 func _physics_process(delta: float) -> void:
 	# we currently would only reach a sound-speed of 60 m/s, nowhere close to the 343 m/s of the actual speed of sound (also dependent on the cellsize)
 	# 2 options, either ignore it or simulate multiple spreads per tick (5.7 btw, fuck, just make it 6 atp.)
-	if Input.is_action_just_pressed("enter"):
+	if Input.is_action_just_pressed("ui_undo") and _isDebug:
 		print("Prepping sim")
 		if not TESTID:
 			TESTID = register_source(self)
-		emitSound(get_tree().get_first_node_in_group("player").global_position + Vector3.UP, 5, TESTID)
+		emitSound(get_tree().get_first_node_in_group("player").global_position + Vector3.UP, 5, TESTID) # this assumes you have a player in a group called player
 	
-	if Input.is_action_just_pressed("ctrl"):
-		simulateSound(true)
+	if Input.is_action_just_pressed("ui_redo") or not _isDebug: # GIG, wie geil ist Dustin
+		simulateSound(_isDebug)
 func simulateSound(generateDebug: bool = false) -> void:
 	var debug_start_usec := Time.get_ticks_usec() if generateDebug else 0
 	
