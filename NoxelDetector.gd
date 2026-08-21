@@ -5,16 +5,13 @@ extends Node3D
 @onready var mesh_green: MeshInstance3D = $meshContainer/meshGreen
 @onready var info: Label3D = $meshContainer/info
 
-func _ready():
-	rotation = Vector3(0,0,0) # just a safety thing, could be removed
-
 func _physics_process(delta: float) -> void:
 	var cellSize := HKNoxelManager.cellSize
 	meshContainer.scale = Vector3(cellSize, cellSize, cellSize)
 	
 	var result := HKNoxelManager.getNoxelInformation(global_position + Vector3(cellSize/2, cellSize/2, cellSize/2)) # just so we check at the center
-	info.text = str(result)
-	return
+	#info.text = str(result)
+	
 	if result.x == 0:
 		info.text = ""
 		mesh_red.show()
