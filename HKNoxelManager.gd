@@ -164,6 +164,7 @@ func _physics_process(delta: float) -> void:
 		if not TESTID:
 			TESTID = register_source(self)
 		emitSound(get_tree().get_first_node_in_group("player").global_position + Vector3.UP, 5, TESTID)
+	
 	simulateSound(false)
 func simulateSound(generateDebug: bool = false) -> void:
 	var debug_start_usec := Time.get_ticks_usec() if generateDebug else 0
@@ -179,6 +180,7 @@ func simulateSound(generateDebug: bool = false) -> void:
 		soundLevelSnapshot[cellID] = soundLevel[cellID]
 	var cellsToActivate: Array[int]
 	var cellsToDeactivate: Array[int]
+	var indexCounter : int = 0
 	for cellID in activeCellIds:
 		# spreading logic
 		var emitterID = emitter[cellID]
@@ -189,7 +191,7 @@ func simulateSound(generateDebug: bool = false) -> void:
 		if newSoundLevel < SOUND_FLOOR: # we DO NOT have to pass on a sound that would make a cell delete itself again
 			soundLevel[cellID] = 0
 			emitter[cellID] = 0
-			cellsToDeactivate.append(cellID)
+			cellsToDeactivate.append(indexCounter)
 			continue
 		for neighbourCellID in neighbourCellIDs:
 			var neighbourSoundLevel = soundLevel[neighbourCellID]
@@ -207,10 +209,12 @@ func simulateSound(generateDebug: bool = false) -> void:
 		else:
 			soundLevel[cellID] = 0
 			emitter[cellID] = 0
-			cellsToDeactivate.append(cellID)
+			cellsToDeactivate.append(indexCounter)
 		
 		# deletion logic
 		_freeQueueDetector[emitterID] = 1
+		
+		indexCounter += 1
 	if generateDebug:
 		print("went over " + str(activeCellIds.size()) + " cells")
 	
@@ -223,8 +227,13 @@ func simulateSound(generateDebug: bool = false) -> void:
 	# removin deleted cells
 	if generateDebug:
 		print(cellsToDeactivate.size())
-	for cellID in cellsToDeactivate:
-		activeCellIds.erase(cellID) # theoredicly a bottleneck, not that much should be deleted at once however
+	for cellIndex in cellsToDeactivate:
+		# swap delete for performence
+		var lastIndex = activeCellIds.size() - 1
+		var storage = activeCellIds[lastIndex]
+		activeCellIds[lastIndex] = activeCellIds[cellIndex]
+		activeCellIds[cellIndex] = storage
+		activeCellIds.pop_back()
 	if generateDebug:
 		print("removed over " + str(cellsToDeactivate.size()) + " active cells")
 	
