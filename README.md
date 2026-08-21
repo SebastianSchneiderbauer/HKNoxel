@@ -16,6 +16,8 @@ a godot addon which adds the capability for voxel based noise propagation
 <details open>
   <summary>not intended for:</summary>
    
-    simulating actual sound (reflections, echos, etc.)
-    actually playing sounds
+    ⚠️ simulating actual sound (reflections, echos, etc.)
+    ⚠️ actually playing sounds
 </details>
+
+demo scene coming soon...
