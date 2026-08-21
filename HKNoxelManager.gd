@@ -165,7 +165,8 @@ func _physics_process(delta: float) -> void:
 			TESTID = register_source(self)
 		emitSound(get_tree().get_first_node_in_group("player").global_position + Vector3.UP, 5, TESTID)
 	
-	simulateSound(false)
+	if Input.is_action_just_pressed("ctrl"):
+		simulateSound(true)
 func simulateSound(generateDebug: bool = false) -> void:
 	var debug_start_usec := Time.get_ticks_usec() if generateDebug else 0
 	
@@ -180,8 +181,8 @@ func simulateSound(generateDebug: bool = false) -> void:
 		soundLevelSnapshot[cellID] = soundLevel[cellID]
 	var cellsToActivate: Array[int]
 	var cellsToDeactivate: Array[int]
-	var indexCounter : int = 0
-	for cellID in activeCellIds:
+	for indexCounter in activeCellIds.size():
+		var cellID = activeCellIds[indexCounter]
 		# spreading logic
 		var emitterID = emitter[cellID]
 		var neighbourCellIDs = _getFreeNeighbourIndexes(cellID)
@@ -213,8 +214,6 @@ func simulateSound(generateDebug: bool = false) -> void:
 		
 		# deletion logic
 		_freeQueueDetector[emitterID] = 1
-		
-		indexCounter += 1
 	if generateDebug:
 		print("went over " + str(activeCellIds.size()) + " cells")
 	
