@@ -5,6 +5,17 @@ in VERY EARLY stages of development. this version works, but will almost certain
 a godot addon which adds the capability for voxel based noise propagation
 
 - intended to be used for making enemies react to sound you emit (footsteps, gunshots, etc.)
-- not intended for actually playing sounds, you can certainly try though...
-
-HELLA non performent rn, since i still need to switch the removing of empty Noxels from array.erase(ID) to something that does not suck your pc dry of resources
+- not intended for actually playing or simulation physically accurate sounds, as it is not completely realistic
+    - walls completely drown out the sound, dampening is not implemented
+    - spreading is not based on physics (see visualization below)
+<details open>
+  <summary>intended for:</summary>
+   
+    triggering behavior based on player sounds (like enemies reacting to footsteps, gunshots, etc.)
+</details>
+<details open>
+  <summary>not intended for:</summary>
+   
+    simulating actual sound (reflections, echos, etc.)
+    actually playing sounds
+</details>
