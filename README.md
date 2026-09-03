@@ -20,4 +20,5 @@ a godot addon which adds the capability for voxel based noise propagation
     ⚠️ actually playing sounds
 </details>
 
-demo scene coming soon...
+Demo scene included, just check the files once they are installed in the addons folder.
+just make sure: the addon is activated, HKNoxelManager is set as a global named "HKNoxelManager"
