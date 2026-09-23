@@ -5,6 +5,9 @@ extends Resource
 @export var _wallInformation : PackedByteArray
 @export var _cellCount: int
 
+# Runtime cache invalidation; serialized wall data does not need a revision.
+var revision: int = 0
+
 func _init(arraysize: int = 0) -> void: # because the engine initializes with no parameters, we dont want it resetting our baking
 	if arraysize > 0:
 		_initializeWallArray(arraysize)
@@ -13,6 +16,7 @@ func _init(arraysize: int = 0) -> void: # because the engine initializes with no
 func _initializeWallArray(arraysize : int) -> void : # we get in the amount of cells. We use only one bit per wall
 	_cellCount = arraysize
 	_wallInformation.resize(ceili(float(arraysize) / 8))
+	revision += 1
 
 ## Used for placing or removing a wall
 func updateWall(positionId : int, isWall : bool) -> void :
@@ -21,7 +25,10 @@ func updateWall(positionId : int, isWall : bool) -> void :
 	
 	var location := _convertPosId(positionId)
 	var byteValue := _wallInformation[location.x]
-	_wallInformation[location.x] = _set_bit(byteValue, location.y, isWall)
+	var updatedValue: int = _set_bit(byteValue, location.y, isWall)
+	if updatedValue != byteValue:
+		_wallInformation[location.x] = updatedValue
+		revision += 1
 
 ## Used for checking if something is a wall
 func isWall(positionId : int) -> bool:

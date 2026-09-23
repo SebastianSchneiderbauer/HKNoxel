@@ -22,6 +22,14 @@ var dimensions: Vector3i
 
 var activeCellIds: Array[int]
 
+# Static connectivity: one byte per cell, with bits ordered +X, -X, +Y, -Y, +Z, -Z.
+var _neighbourMasks: PackedByteArray
+var _neighbourOffsets: PackedInt32Array
+var _neighbourDeductions: PackedFloat64Array
+var _cachedWallRevision: int = -1
+# Indexed by active-list position, retaining capacity as the cloud shrinks.
+var _soundLevelSnapshot: PackedFloat32Array
+
 var gridStartPosition: Vector3
 var cellCount: int
 var cellSize: float
@@ -39,6 +47,49 @@ func _resetMaps():
 	emitter.fill(0) # same as above
 	gridStartPosition = currentNoxelMap.vGridStartPosition
 	cellSize = currentNoxelMap.cell_size
+	_soundLevelSnapshot.clear()
+	_rebuildNeighbourCache()
+
+func _rebuildNeighbourCache() -> void:
+	var width: int = dimensions.x
+	var plane: int = dimensions.x * dimensions.y
+	_neighbourOffsets = PackedInt32Array([1, -1, width, -width, plane, -plane])
+	_neighbourMasks.resize(cellCount)
+	# Decode the baked wall bits once per candidate, without per-cell helper calls
+	# or temporary neighbour arrays. Boundaries prevent wrapping between rows/planes.
+	var wallBits: PackedByteArray = walls._wallInformation
+	for cellID: int in cellCount:
+		var x: int = cellID % width
+		var y: int = (cellID / width) % dimensions.y
+		var mask: int = 0
+		var neighbour: int = cellID + 1
+		if x + 1 < width and (wallBits[neighbour >> 3] & (1 << (neighbour & 7))) == 0:
+			mask |= 1
+		neighbour = cellID - 1
+		if x > 0 and (wallBits[neighbour >> 3] & (1 << (neighbour & 7))) == 0:
+			mask |= 2
+		neighbour = cellID + width
+		if y + 1 < dimensions.y and (wallBits[neighbour >> 3] & (1 << (neighbour & 7))) == 0:
+			mask |= 4
+		neighbour = cellID - width
+		if y > 0 and (wallBits[neighbour >> 3] & (1 << (neighbour & 7))) == 0:
+			mask |= 8
+		neighbour = cellID + plane
+		if neighbour < cellCount and (wallBits[neighbour >> 3] & (1 << (neighbour & 7))) == 0:
+			mask |= 16
+		neighbour = cellID - plane
+		if neighbour >= 0 and (wallBits[neighbour >> 3] & (1 << (neighbour & 7))) == 0:
+			mask |= 32
+		_neighbourMasks[cellID] = mask
+	_neighbourDeductions.resize(64)
+	for mask: int in 64:
+		var count: int = 0
+		for direction: int in 6:
+			if mask & (1 << direction):
+				count += 1
+		_neighbourDeductions[mask] = (float(count) / 6) * CONFINEMENT_DEDUCTION
+	_cachedWallRevision = walls.revision
+
 func _indexOf(objectPosition: Vector3) -> int: # ported from the Noxel
 	var relativePosition: Vector3 = objectPosition - gridStartPosition
 	var voxelPosition: Vector3 = (relativePosition / cellSize).floor()
@@ -168,12 +219,14 @@ func _physics_process(delta: float) -> void:
 		print("Prepping sim")
 		if not TESTID:
 			TESTID = register_source(self)
-		emitSound(get_tree().get_first_node_in_group("player").global_position + Vector3.UP, 5, TESTID) # this assumes you have a player in a group called player
+		emitSound(get_tree().get_first_node_in_group("player").global_position + Vector3.UP, 10, TESTID) # this assumes you have a player in a group called player
 	
 	if Input.is_action_just_pressed("ui_redo") or not _isDebug: # GIG, wie geil ist Dustin
 		simulateSound(_isDebug)
 func simulateSound(generateDebug: bool = false) -> void:
 	var debug_start_usec := Time.get_ticks_usec() if generateDebug else 0
+	if walls and _cachedWallRevision != walls.revision:
+		_rebuildNeighbourCache()
 	
 	# reset freeing detector Array
 	_freeQueueDetector.resize(256)
@@ -181,26 +234,30 @@ func simulateSound(generateDebug: bool = false) -> void:
 	
 	# only the currently active cells can change this tick, so we only need their pre-tick values,
 	# not a copy of the whole (potentially huge) grid
-	var soundLevelSnapshot: Dictionary = {}
-	for cellID in activeCellIds:
-		soundLevelSnapshot[cellID] = soundLevel[cellID]
+	var activeCount: int = activeCellIds.size()
+	if _soundLevelSnapshot.size() < activeCount:
+		_soundLevelSnapshot.resize(maxi(activeCount, _soundLevelSnapshot.size() * 2))
+	for indexCounter: int in activeCount:
+		_soundLevelSnapshot[indexCounter] = soundLevel[activeCellIds[indexCounter]]
 	var cellsToActivate: Array[int]
 	var cellsToDeactivate: Array[int]
-	for indexCounter in activeCellIds.size():
-		var cellID = activeCellIds[indexCounter]
+	for indexCounter: int in activeCount:
+		var cellID: int = activeCellIds[indexCounter]
 		# spreading logic
-		var emitterID = emitter[cellID]
-		var neighbourCellIDs = _getFreeNeighbourIndexes(cellID)
-		var freeNeighbourCount = neighbourCellIDs.size()
-		var currentSoundLevel = soundLevelSnapshot[cellID] # pre tick data that was not edited by another cell
-		var newSoundLevel = currentSoundLevel - (float(freeNeighbourCount) / 6) * CONFINEMENT_DEDUCTION
+		var emitterID: int = emitter[cellID]
+		var neighbourMask: int = _neighbourMasks[cellID]
+		var currentSoundLevel: float = _soundLevelSnapshot[indexCounter] # pre tick data that was not edited by another cell
+		var newSoundLevel: float = currentSoundLevel - _neighbourDeductions[neighbourMask]
 		if newSoundLevel < SOUND_FLOOR: # we DO NOT have to pass on a sound that would make a cell delete itself again
 			soundLevel[cellID] = 0
 			emitter[cellID] = 0
 			cellsToDeactivate.append(indexCounter)
 			continue
-		for neighbourCellID in neighbourCellIDs:
-			var neighbourSoundLevel = soundLevel[neighbourCellID]
+		for direction: int in 6:
+			if (neighbourMask & (1 << direction)) == 0:
+				continue
+			var neighbourCellID: int = cellID + _neighbourOffsets[direction]
+			var neighbourSoundLevel: float = soundLevel[neighbourCellID]
 			if newSoundLevel <= neighbourSoundLevel:
 				continue
 			
