@@ -27,7 +27,7 @@ func is_compatible(walls: NoxelWallStorage, dimensions: Vector3i, side_limit: in
 		and neighbor_offsets.size() == cluster_sides.size() + 1 \
 		and neighbor_offsets[cluster_sides.size()] == neighbor_ids.size()
 
-func build(walls: NoxelWallStorage, dimensions: Vector3i, side_limit: int) -> void:
+func build(walls: NoxelWallStorage, dimensions: Vector3i, side_limit: int, progress: Callable = Callable(), tree: SceneTree = null) -> void:
 	grid_dimensions = dimensions
 	max_side_cells = maxi(1, side_limit)
 	wall_checksum = hash(walls._wallInformation)
@@ -42,6 +42,9 @@ func build(walls: NoxelWallStorage, dimensions: Vector3i, side_limit: int) -> vo
 	neighbor_offsets.clear()
 	neighbor_ids.clear()
 	open_side_masks.clear()
+	if progress.is_valid():
+		progress.call(0.0)
+	var last_yield_usec: int = Time.get_ticks_usec()
 	
 	# Greedy, deterministic partition. Test only the three newly added cube faces
 	# when increasing a candidate's side, then mark its cells in one pass.
@@ -79,10 +82,19 @@ func build(walls: NoxelWallStorage, dimensions: Vector3i, side_limit: int) -> vo
 			for dy: int in side:
 				for dx: int in side:
 					cell_to_cluster[origin + dx + dy * width + dz * plane] = cluster_id
+		if tree != null and Time.get_ticks_usec() - last_yield_usec >= 16000:
+			if progress.is_valid():
+				progress.call(0.5 * float(origin + 1) / float(cell_count))
+			await tree.process_frame
+			last_yield_usec = Time.get_ticks_usec()
 	
-	_build_neighbors()
+	if progress.is_valid():
+		progress.call(0.5)
+	await _build_neighbors(progress, tree)
+	if progress.is_valid():
+		progress.call(1.0)
 
-func _build_neighbors() -> void:
+func _build_neighbors(progress: Callable, tree: SceneTree) -> void:
 	var width: int = grid_dimensions.x
 	var plane: int = width * grid_dimensions.y
 	var cluster_count: int = cluster_sides.size()
@@ -90,6 +102,7 @@ func _build_neighbors() -> void:
 	seen.resize(cluster_count)
 	seen.fill(-1)
 	neighbor_offsets.append(0)
+	var last_yield_usec: int = Time.get_ticks_usec()
 
 	for cluster_id: int in cluster_count:
 		var origin: int = cluster_origins[cluster_id]
@@ -131,3 +144,8 @@ func _build_neighbors() -> void:
 						neighbor_ids.append(neighbor)
 		open_side_masks.append(mask)
 		neighbor_offsets.append(neighbor_ids.size())
+		if tree != null and Time.get_ticks_usec() - last_yield_usec >= 16000:
+			if progress.is_valid():
+				progress.call(0.5 + 0.5 * float(cluster_id + 1) / float(cluster_count))
+			await tree.process_frame
+			last_yield_usec = Time.get_ticks_usec()

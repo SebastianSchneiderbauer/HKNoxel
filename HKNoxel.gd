@@ -19,6 +19,7 @@ extends Node3D
 @export var vGridStartPosition: Vector3 # same reasoning as vGridDimensions - the manager reads this for its index/position math
 
 signal bake_progress(progress: float)
+signal chunk_progress(progress: float)
 signal bake_complete()
 
 var _debug_positions: PackedVector3Array
@@ -61,7 +62,7 @@ func bake_sound_grid(debug: bool = false) -> void:
 						_debug_positions.push_back(vGridStartPosition + Vector3(x,y,z) * cell_size + Vector3(cell_size/2, cell_size/2, cell_size/2))
 		
 		# yield periodically so the engine doesn't freeze on large grids and progress can be shown
-		var progress := 0.9 * float(z + 1) / float(vGridDimensions.z)
+		var progress := float(z + 1) / float(vGridDimensions.z)
 		bake_progress.emit(progress)
 		
 		# regularly let the user know the bake is still going, without spamming every layer
@@ -77,8 +78,9 @@ func bake_sound_grid(debug: bool = false) -> void:
 	# are grouped into cubes; all runtime connections are baked from shared faces.
 	var max_side_cells: int = maxi(1, floori(max_cluster_width / cell_size))
 	clusterBakeData = NoxelClusterStorage.new()
-	clusterBakeData.build(wallBakeData, vGridDimensions, max_side_cells)
-	bake_progress.emit(1.0)
+	chunk_progress.emit(0.0)
+	await tree.process_frame
+	await clusterBakeData.build(wallBakeData, vGridDimensions, max_side_cells, Callable(self, "_on_chunk_progress"), tree)
 	print("baked " + str(clusterBakeData.cluster_sides.size()) + " clusters and " + str(clusterBakeData.neighbor_ids.size()) + " directed connections")
 	
 	if debug:
@@ -89,6 +91,9 @@ func bake_sound_grid(debug: bool = false) -> void:
 	var elapsed_usec := Time.get_ticks_usec() - start_time
 	print("finished baking: " + str(wallcount) + "/" + str(totalCount) + " (" + str(float(wallcount) / float(totalCount) * 100).substr(0, 5) + " %) cells were detected as walls in " + str(elapsed_usec / 1000.0) + " ms")
 	bake_complete.emit()
+
+func _on_chunk_progress(progress: float) -> void:
+	chunk_progress.emit(progress)
 const DEBUG_NODE_NAME := "HKNoxelDebugVisualization"
 
 func remove_debug_visualization() -> void:
