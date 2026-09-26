@@ -16,7 +16,6 @@ extends Resource
 @export var max_side_cells: int
 @export var wall_checksum: int
 
-
 func is_compatible(walls: NoxelWallStorage, dimensions: Vector3i, side_limit: int) -> bool:
 	return walls != null \
 		and grid_dimensions == dimensions \
@@ -27,7 +26,6 @@ func is_compatible(walls: NoxelWallStorage, dimensions: Vector3i, side_limit: in
 		and open_side_masks.size() == cluster_sides.size() \
 		and neighbor_offsets.size() == cluster_sides.size() + 1 \
 		and neighbor_offsets[cluster_sides.size()] == neighbor_ids.size()
-
 
 func build(walls: NoxelWallStorage, dimensions: Vector3i, side_limit: int) -> void:
 	grid_dimensions = dimensions
@@ -44,7 +42,7 @@ func build(walls: NoxelWallStorage, dimensions: Vector3i, side_limit: int) -> vo
 	neighbor_offsets.clear()
 	neighbor_ids.clear()
 	open_side_masks.clear()
-
+	
 	# Greedy, deterministic partition. Test only the three newly added cube faces
 	# when increasing a candidate's side, then mark its cells in one pass.
 	for origin: int in cell_count:
@@ -55,7 +53,7 @@ func build(walls: NoxelWallStorage, dimensions: Vector3i, side_limit: int) -> vo
 		var z: int = origin / plane
 		var limit: int = mini(max_side_cells, mini(dimensions.x - x, mini(dimensions.y - y, dimensions.z - z)))
 		var side: int = 1
-		for candidate: int in range(2, limit + 1):
+		for candidate: int in range(2, limit + 1): # if i did this in programming class, the teachers would probably kill themself
 			var edge: int = candidate - 1
 			var fits: bool = true
 			for dz: int in candidate:
@@ -81,9 +79,8 @@ func build(walls: NoxelWallStorage, dimensions: Vector3i, side_limit: int) -> vo
 			for dy: int in side:
 				for dx: int in side:
 					cell_to_cluster[origin + dx + dy * width + dz * plane] = cluster_id
-
+	
 	_build_neighbors()
-
 
 func _build_neighbors() -> void:
 	var width: int = grid_dimensions.x
@@ -114,7 +111,7 @@ func _build_neighbors() -> void:
 				continue
 			if direction == 5 and z == 0:
 				continue
-
+			
 			for v: int in side:
 				for u: int in side:
 					var adjacent_cell: int

@@ -37,10 +37,8 @@ var _showClusterDebug: bool = false
 var _cluster_debug_mesh: MultiMeshInstance3D
 var _debug_console: Node
 
-
 func _exists() -> bool:
 	return currentNoxelMap != null
-
 
 func setCurrentNMap(nm, reset: bool = true) -> void:
 	currentNoxelMap = nm
@@ -49,11 +47,9 @@ func setCurrentNMap(nm, reset: bool = true) -> void:
 	else:
 		_clearGrid()
 
-
 func removeCurrentNmap() -> void:
 	currentNoxelMap = null
 	_clearGrid()
-
 
 func _clearGrid() -> void:
 	# Once the field is discarded, staged source IDs can be reused safely.
@@ -75,7 +71,6 @@ func _clearGrid() -> void:
 	_clear_debug_labels()
 	_clear_cluster_visualization()
 
-
 func _resetMaps() -> void:
 	_clearGrid()
 	walls = currentNoxelMap.wallBakeData
@@ -95,7 +90,6 @@ func _resetMaps() -> void:
 		_clearGrid()
 		return
 	_rebuildClusterCache()
-
 
 func _rebuildClusterCache() -> void:
 	var max_side_cells: int = maxi(1, floori(currentNoxelMap.max_cluster_width / cellSize))
@@ -136,7 +130,6 @@ func _rebuildClusterCache() -> void:
 	if _showClusterDebug:
 		_build_cluster_visualization()
 
-
 func _indexOf(objectPosition: Vector3) -> int:
 	if cellCount == 0:
 		return -1
@@ -148,7 +141,6 @@ func _indexOf(objectPosition: Vector3) -> int:
 		return -1
 	return x + y * dimensions.x + z * dimensions.x * dimensions.y
 
-
 func _positionOf(cluster_id: int) -> Vector3:
 	var origin: int = clusters.cluster_origins[cluster_id]
 	var side: int = clusters.cluster_sides[cluster_id]
@@ -157,25 +149,21 @@ func _positionOf(cluster_id: int) -> Vector3:
 	var z: int = origin / (dimensions.x * dimensions.y)
 	return gridStartPosition + (Vector3(x, y, z) + Vector3.ONE * float(side) * 0.5) * cellSize
 
-
 func _ready() -> void:
 	_active_sources.resize(256)
 	for i: int in 256:
 		_free_ids.append(i)
 	call_deferred("_register_debug_command")
 
-
 func _exit_tree() -> void:
 	if is_instance_valid(_debug_console):
 		_debug_console.call("unregister_command", "debugchunks")
 	_clear_cluster_visualization()
 
-
 func _register_debug_command() -> void:
 	_debug_console = get_node_or_null("/root/HKConsole")
 	if _debug_console and _debug_console.has_method("register_command"):
 		_debug_console.call("register_command", "debugchunks", Callable(self, "_toggle_cluster_visualization"), true, true)
-
 
 func _toggle_cluster_visualization() -> void:
 	setClusterVisualization(not _showClusterDebug)
@@ -187,7 +175,6 @@ func _toggle_cluster_visualization() -> void:
 	else:
 		print(message)
 
-
 func setClusterVisualization(visible: bool) -> void:
 	_showClusterDebug = visible
 	if visible:
@@ -195,12 +182,11 @@ func setClusterVisualization(visible: bool) -> void:
 	else:
 		_clear_cluster_visualization()
 
-
 func _build_cluster_visualization() -> void:
 	_clear_cluster_visualization()
 	if clusters == null or clusters.cluster_sides.is_empty():
 		return
-
+	
 	# A unit wire cube is scaled and placed once per cluster by a MultiMesh.
 	# Lines make the partition visible without hiding the level geometry.
 	var material := StandardMaterial3D.new()
@@ -219,7 +205,7 @@ func _build_cluster_visualization() -> void:
 	for corner_index: int in edges:
 		wire_cube.surface_add_vertex(corners[corner_index])
 	wire_cube.surface_end()
-
+	
 	var instances := MultiMesh.new()
 	instances.transform_format = MultiMesh.TRANSFORM_3D
 	instances.use_colors = true
@@ -232,19 +218,17 @@ func _build_cluster_visualization() -> void:
 		instances.set_instance_transform(cluster_id, Transform3D(Basis().scaled(Vector3.ONE * width), _positionOf(cluster_id)))
 		var fraction: float = float(side - 1) / float(maxi(1, max_side - 1))
 		instances.set_instance_color(cluster_id, Color.from_hsv(0.55 - 0.50 * fraction, 0.9, 1.0))
-
+	
 	_cluster_debug_mesh = MultiMeshInstance3D.new()
 	_cluster_debug_mesh.name = "HKNoxelClusterDebug"
 	_cluster_debug_mesh.multimesh = instances
 	_cluster_debug_mesh.custom_aabb = AABB(gridStartPosition, Vector3(dimensions) * cellSize)
 	add_child(_cluster_debug_mesh)
 
-
 func _clear_cluster_visualization() -> void:
 	if is_instance_valid(_cluster_debug_mesh):
 		_cluster_debug_mesh.queue_free()
 	_cluster_debug_mesh = null
-
 
 func register_source(source: Node) -> int:
 	if _free_ids.is_empty():
@@ -253,7 +237,6 @@ func register_source(source: Node) -> int:
 	var id: int = _free_ids.pop_back()
 	_active_sources[id] = source
 	return id
-
 
 func free_source(id: int) -> void:
 	if id < 0 or id >= _active_sources.size() or _active_sources[id] == null:
@@ -265,12 +248,10 @@ func free_source(id: int) -> void:
 	if not _freeQueue.has(id):
 		_freeQueue.append(id)
 
-
 func get_source(id: int) -> Node:
 	if id < 0 or id >= _active_sources.size():
 		return null
 	return _active_sources[id]
-
 
 ## Emits into the cluster containing startPosition. "decibels" is a game level,
 ## not an acoustic decibel measurement.
@@ -300,7 +281,6 @@ func emitSound(startPosition: Vector3, decibels: int, emitterId: int) -> void:
 		_activeFlags[cluster_id] = 1
 		activeClusterIds.append(cluster_id)
 
-
 ## Returns the cluster sound level and emitter ID at a fine-grid position.
 func getNoxelInformation(wantedPosition: Vector3) -> Vector2:
 	var cell_index: int = _indexOf(wantedPosition)
@@ -311,12 +291,10 @@ func getNoxelInformation(wantedPosition: Vector3) -> Vector2:
 		return Vector2.ZERO
 	return Vector2(soundLevel[cluster_id], emitter[cluster_id])
 
-
 func setDebugMode(debug: bool) -> void:
 	if _isDebug and not debug:
 		_clear_debug_labels()
 	_isDebug = debug
-
 
 func _physics_process(_delta: float) -> void:
 	if Input.is_action_just_pressed("ui_undo") and _isDebug:
@@ -328,14 +306,13 @@ func _physics_process(_delta: float) -> void:
 	if Input.is_action_just_pressed("ui_redo") or not _isDebug:
 		simulateSound(_isDebug)
 
-
 func simulateSound(generateDebug: bool = false) -> void:
 	var debug_start_usec: int = Time.get_ticks_usec() if generateDebug else 0
 	if walls == null or clusters == null:
 		return
 	if _cachedWallRevision != walls.revision or _cachedMaxSideCells != maxi(1, floori(currentNoxelMap.max_cluster_width / cellSize)):
 		_rebuildClusterCache()
-
+	
 	var active_count: int = activeClusterIds.size()
 	if _soundLevelSnapshot.size() < active_count:
 		var capacity: int = maxi(active_count, maxi(1, _soundLevelSnapshot.size() * 2))
@@ -345,7 +322,7 @@ func simulateSound(generateDebug: bool = false) -> void:
 		var cluster_id: int = activeClusterIds[i]
 		_soundLevelSnapshot[i] = soundLevel[cluster_id]
 		_emitterSnapshot[i] = emitter[cluster_id]
-
+	
 	# Decay the old field first. Incoming sound then competes with the decayed
 	# value, so processing order cannot erase a stronger arrival in this tick.
 	for i: int in active_count:
@@ -356,7 +333,7 @@ func simulateSound(generateDebug: bool = false) -> void:
 		else:
 			soundLevel[cluster_id] = 0.0
 			emitter[cluster_id] = 0
-
+	
 	for i: int in active_count:
 		var source_id: int = activeClusterIds[i]
 		var travel_deduction: float = _clusterTravelDeductions[source_id]
@@ -372,7 +349,7 @@ func simulateSound(generateDebug: bool = false) -> void:
 			if _activeFlags[destination_id] == 0:
 				_activeFlags[destination_id] = 1
 				activeClusterIds.append(destination_id)
-
+	
 	# Only the old portion may have gone inactive. Swap removal keeps the list
 	# compact without sorting or shifting a large active cloud.
 	for i: int in range(active_count - 1, -1, -1):
@@ -382,7 +359,7 @@ func simulateSound(generateDebug: bool = false) -> void:
 		_activeFlags[cluster_id] = 0
 		activeClusterIds[i] = activeClusterIds[activeClusterIds.size() - 1]
 		activeClusterIds.pop_back()
-
+	
 	_freeQueueDetector.resize(256)
 	_freeQueueDetector.fill(0)
 	for cluster_id: int in activeClusterIds:
@@ -395,11 +372,10 @@ func simulateSound(generateDebug: bool = false) -> void:
 		else:
 			still_pending.append(queued_id)
 	_freeQueue = still_pending
-
+	
 	if generateDebug:
 		print("simulateSound processed " + str(active_count) + " clusters in " + str((Time.get_ticks_usec() - debug_start_usec) / 1000.0) + " ms")
 		debug_visualize_active_cells()
-
 
 func debug_visualize_active_cells() -> void:
 	_clear_debug_labels()
@@ -410,7 +386,6 @@ func debug_visualize_active_cells() -> void:
 		label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 		add_child(label)
 		_debug_labels.append(label)
-
 
 func _clear_debug_labels() -> void:
 	for label: Label3D in _debug_labels:

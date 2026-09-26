@@ -11,13 +11,13 @@ func _enter_tree() -> void:
 	toolbar_button.pressed.connect(_on_bake_pressed)
 	add_control_to_container(CONTAINER_SPATIAL_EDITOR_MENU, toolbar_button)
 	toolbar_button.hide()
-
+	
 	debug_bake_button = Button.new()
 	debug_bake_button.text = "Bake with Debug Visualization"
 	debug_bake_button.pressed.connect(_on_bake_debug_pressed)
 	add_control_to_container(CONTAINER_SPATIAL_EDITOR_MENU, debug_bake_button)
 	debug_bake_button.hide()
-
+	
 	remove_debug_button = Button.new()
 	remove_debug_button.text = "Remove Debug Visualization"
 	remove_debug_button.pressed.connect(_on_remove_debug_pressed)
