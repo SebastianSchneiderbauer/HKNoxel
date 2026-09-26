@@ -22,6 +22,7 @@ func _process(_delta: float) -> bool:
 	_test_serialized_bake()
 	_test_map_script()
 	_test_fast_open_propagation()
+	_test_fine_and_clustered_reach()
 	_benchmark_open_grid()
 	if failures == 0:
 		print("HKNoxel cluster smoke tests passed")
@@ -140,7 +141,7 @@ func _test_fast_open_propagation() -> void:
 	manager.emitSound(Vector3(0.5, 0.5, 0.5), 15, source_id)
 	manager.simulateSound()
 	var next_level: float = manager.getNoxelInformation(Vector3(7.5, 2.5, 2.5)).x
-	_expect(is_equal_approx(next_level, 15.0 - 5.0 * 0.4 / 6.0), "large destination should charge five fine-cell steps")
+	_expect(is_equal_approx(next_level, 15.0 - 4.0 * 0.4 - 0.4 / 6.0), "five-cell source should charge its internal travel and open face")
 	_expect(manager.getNoxelInformation(Vector3(12.5, 2.5, 2.5)).x == 0.0, "sound must not cross two edges in one tick")
 	manager.simulateSound()
 	_expect(manager.getNoxelInformation(Vector3(12.5, 2.5, 2.5)).x > 0.0, "sound should reach the third large cube in two ticks")
@@ -154,6 +155,43 @@ func _test_fast_open_propagation() -> void:
 	manager.setClusterVisualization(false)
 	manager.free_source(source_id)
 	manager.removeCurrentNmap()
+
+
+func _test_fine_and_clustered_reach() -> void:
+	for width: int in [2, 3, 5]:
+		var fine_reach: int = _measure_reach(1, width)
+		var cluster_reach: int = _measure_reach(width, width)
+		print("One-direction reach, width %d: fine %d cells; clusters %d cells" % [width, fine_reach, cluster_reach])
+		_expect(fine_reach > 0 and absi(fine_reach - cluster_reach) <= width * 2, "clustered sound should have roughly the fine-grid reach")
+
+
+func _measure_reach(max_side: int, width: int) -> int:
+	var manager: Node = root.get_node_or_null("HKNoxelManager")
+	var dimensions := Vector3i(60, width, width)
+	var center: float = float(width / 2) + 0.5
+	var map := FakeMap.new()
+	map.vGridDimensions = dimensions
+	map.vGridStartPosition = Vector3.ZERO
+	map.cell_size = 1.0
+	map.max_cluster_width = float(max_side)
+	map.wallBakeData = _make_walls(dimensions)
+	map.clusterBakeData = NoxelClusterStorage.new()
+	map.clusterBakeData.build(map.wallBakeData, dimensions, max_side)
+	manager.setCurrentNMap(map)
+	var source_id: int = manager.register_source(manager)
+	manager.emitSound(Vector3(0.5, center, center), 10, source_id)
+	var furthest: int = 0
+	for tick: int in 70:
+		manager.simulateSound()
+		if tick == 0 and max_side == 3:
+			var first_neighbor: float = manager.getNoxelInformation(Vector3(4.5, center, center)).x
+			_expect(is_equal_approx(first_neighbor, 10.0 - 2.0 * 0.4 - 0.4 / 6.0), "size-3 first hop should charge internal travel")
+		for x: int in dimensions.x:
+			if manager.getNoxelInformation(Vector3(float(x) + 0.5, center, center)).x > 0.0:
+				furthest = maxi(furthest, x)
+	manager.free_source(source_id)
+	manager.removeCurrentNmap()
+	return furthest
 
 
 func _benchmark_open_grid() -> void:

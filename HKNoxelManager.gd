@@ -23,6 +23,7 @@ var _emitterSnapshot: PackedByteArray
 var _cachedWallRevision: int = -1
 var _cachedMaxSideCells: int = -1
 var _sideDeductions: PackedFloat32Array
+var _clusterTravelDeductions: PackedFloat32Array
 
 var _free_ids: Array[int] = []
 var _active_sources: Array[Node] = []
@@ -125,6 +126,12 @@ func _rebuildClusterCache() -> void:
 			if mask & (1 << direction):
 				side_count += 1
 		_sideDeductions[mask] = float(side_count) * CONFINEMENT_DEDUCTION / 6.0
+	_clusterTravelDeductions.resize(cluster_count)
+	for cluster_id: int in cluster_count:
+		# A cube's internal free steps used to be individual noxels. Approximate
+		# those steps at the six-neighbor rate, then charge its exposed faces.
+		var internal_steps: int = clusters.cluster_sides[cluster_id] - 1
+		_clusterTravelDeductions[cluster_id] = float(internal_steps) * CONFINEMENT_DEDUCTION + _sideDeductions[clusters.open_side_masks[cluster_id]]
 	_clear_debug_labels()
 	if _showClusterDebug:
 		_build_cluster_visualization()
@@ -352,12 +359,12 @@ func simulateSound(generateDebug: bool = false) -> void:
 
 	for i: int in active_count:
 		var source_id: int = activeClusterIds[i]
-		var deduction_per_cell: float = _sideDeductions[clusters.open_side_masks[source_id]]
-		if deduction_per_cell == 0.0:
+		var travel_deduction: float = _clusterTravelDeductions[source_id]
+		if travel_deduction == 0.0:
 			continue
 		for edge: int in range(clusters.neighbor_offsets[source_id], clusters.neighbor_offsets[source_id + 1]):
 			var destination_id: int = clusters.neighbor_ids[edge]
-			var candidate: float = _soundLevelSnapshot[i] - deduction_per_cell * clusters.cluster_sides[destination_id]
+			var candidate: float = _soundLevelSnapshot[i] - travel_deduction
 			if candidate < SOUND_FLOOR or candidate <= soundLevel[destination_id]:
 				continue
 			soundLevel[destination_id] = candidate
