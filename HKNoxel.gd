@@ -89,11 +89,19 @@ func bake_sound_grid(debug: bool = false) -> void:
 	var elapsed_usec := Time.get_ticks_usec() - start_time
 	print("finished baking: " + str(wallcount) + "/" + str(totalCount) + " (" + str(float(wallcount) / float(totalCount) * 100).substr(0, 5) + " %) cells were detected as walls in " + str(elapsed_usec / 1000.0) + " ms")
 	bake_complete.emit()
-func remove_debug_visualization():
+const DEBUG_NODE_NAME := "HKNoxelDebugVisualization"
+
+func remove_debug_visualization() -> void:
 	var count : int = 0
 	for child in get_children():
-		child.queue_free()
-		count += 1
+		var legacy_debug := false
+		if child is MultiMeshInstance3D:
+			var mesh_instance := child as MultiMeshInstance3D
+			legacy_debug = str(child.name).begins_with("MultiMeshInstance3D") and mesh_instance.layers == 1 << 18 and mesh_instance.multimesh != null and mesh_instance.multimesh.mesh is BoxMesh
+		if child.name == DEBUG_NODE_NAME or legacy_debug:
+			remove_child(child)
+			child.queue_free()
+			count += 1
 	if count > 0:
 		print("removed debug-meshes")
 const DEBUG_MESH = preload("res://addons/HKNoxel/debugMesh.tscn")
@@ -112,6 +120,7 @@ func _build_debug_multimesh() -> void:
 		multimesh.set_instance_transform(i, Transform3D(Basis(), _debug_positions[i]))
 	
 	var mmi := MultiMeshInstance3D.new()
+	mmi.name = DEBUG_NODE_NAME
 	mmi.multimesh = multimesh
 	mmi.layers = 1 << 18
 	add_child(mmi)
@@ -121,8 +130,12 @@ func _build_debug_multimesh() -> void:
 		# inherit our own owner so PackedScene.pack() keeps this node when the map is compiled at runtime
 		mmi.owner = owner
 func _ready() -> void:
+	if Engine.is_editor_hint():
+		return
 	HKNoxelManager.setCurrentNMap(self, vGridDimensions != Vector3i.ZERO)
 func _exit_tree() -> void:
+	if Engine.is_editor_hint():
+		return
 	HKNoxelManager.removeCurrentNmap()
 ## Converting a global position into a id
 func _indexOf(objectPosition: Vector3) -> int:
