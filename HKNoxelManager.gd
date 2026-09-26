@@ -32,6 +32,9 @@ var _freeQueueDetector: PackedByteArray
 var TESTID: int = -1
 var _isDebug: bool = false
 var _debug_labels: Array[Label3D] = []
+var _showClusterDebug: bool = false
+var _cluster_debug_mesh: MultiMeshInstance3D
+var _debug_console: Node
 
 
 func _exists() -> bool:
@@ -69,6 +72,7 @@ func _clearGrid() -> void:
 	_cachedWallRevision = -1
 	_cachedMaxSideCells = -1
 	_clear_debug_labels()
+	_clear_cluster_visualization()
 
 
 func _resetMaps() -> void:
@@ -122,6 +126,8 @@ func _rebuildClusterCache() -> void:
 				side_count += 1
 		_sideDeductions[mask] = float(side_count) * CONFINEMENT_DEDUCTION / 6.0
 	_clear_debug_labels()
+	if _showClusterDebug:
+		_build_cluster_visualization()
 
 
 func _indexOf(objectPosition: Vector3) -> int:
@@ -149,6 +155,88 @@ func _ready() -> void:
 	_active_sources.resize(256)
 	for i: int in 256:
 		_free_ids.append(i)
+	call_deferred("_register_debug_command")
+
+
+func _exit_tree() -> void:
+	if is_instance_valid(_debug_console):
+		_debug_console.call("unregister_command", "debugchunks")
+	_clear_cluster_visualization()
+
+
+func _register_debug_command() -> void:
+	_debug_console = get_node_or_null("/root/HKConsole")
+	if _debug_console and _debug_console.has_method("register_command"):
+		_debug_console.call("register_command", "debugchunks", Callable(self, "_toggle_cluster_visualization"), true, true)
+
+
+func _toggle_cluster_visualization() -> void:
+	setClusterVisualization(not _showClusterDebug)
+	var message: String = "Sound chunks: " + ("visible" if _showClusterDebug else "hidden")
+	if _showClusterDebug and clusters == null:
+		message += " (waiting for a baked map)"
+	if is_instance_valid(_debug_console) and _debug_console.has_method("logInfo"):
+		_debug_console.call("logInfo", message)
+	else:
+		print(message)
+
+
+func setClusterVisualization(visible: bool) -> void:
+	_showClusterDebug = visible
+	if visible:
+		_build_cluster_visualization()
+	else:
+		_clear_cluster_visualization()
+
+
+func _build_cluster_visualization() -> void:
+	_clear_cluster_visualization()
+	if clusters == null or clusters.cluster_sides.is_empty():
+		return
+
+	# A unit wire cube is scaled and placed once per cluster by a MultiMesh.
+	# Lines make the partition visible without hiding the level geometry.
+	var material := StandardMaterial3D.new()
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.vertex_color_use_as_albedo = true
+	material.no_depth_test = true
+	var wire_cube := ImmediateMesh.new()
+	wire_cube.surface_begin(Mesh.PRIMITIVE_LINES, material)
+	var corners := [
+		Vector3(-0.5, -0.5, -0.5), Vector3(0.5, -0.5, -0.5),
+		Vector3(-0.5, 0.5, -0.5), Vector3(0.5, 0.5, -0.5),
+		Vector3(-0.5, -0.5, 0.5), Vector3(0.5, -0.5, 0.5),
+		Vector3(-0.5, 0.5, 0.5), Vector3(0.5, 0.5, 0.5),
+	]
+	var edges := [0, 1, 2, 3, 4, 5, 6, 7, 0, 2, 1, 3, 4, 6, 5, 7, 0, 4, 1, 5, 2, 6, 3, 7]
+	for corner_index: int in edges:
+		wire_cube.surface_add_vertex(corners[corner_index])
+	wire_cube.surface_end()
+
+	var instances := MultiMesh.new()
+	instances.transform_format = MultiMesh.TRANSFORM_3D
+	instances.use_colors = true
+	instances.mesh = wire_cube
+	instances.instance_count = clusters.cluster_sides.size()
+	var max_side: int = maxi(1, clusters.max_side_cells)
+	for cluster_id: int in clusters.cluster_sides.size():
+		var side: int = clusters.cluster_sides[cluster_id]
+		var width: float = float(side) * cellSize * 0.98
+		instances.set_instance_transform(cluster_id, Transform3D(Basis().scaled(Vector3.ONE * width), _positionOf(cluster_id)))
+		var fraction: float = float(side - 1) / float(maxi(1, max_side - 1))
+		instances.set_instance_color(cluster_id, Color.from_hsv(0.55 - 0.50 * fraction, 0.9, 1.0))
+
+	_cluster_debug_mesh = MultiMeshInstance3D.new()
+	_cluster_debug_mesh.name = "HKNoxelClusterDebug"
+	_cluster_debug_mesh.multimesh = instances
+	_cluster_debug_mesh.custom_aabb = AABB(gridStartPosition, Vector3(dimensions) * cellSize)
+	add_child(_cluster_debug_mesh)
+
+
+func _clear_cluster_visualization() -> void:
+	if is_instance_valid(_cluster_debug_mesh):
+		_cluster_debug_mesh.queue_free()
+	_cluster_debug_mesh = null
 
 
 func register_source(source: Node) -> int:

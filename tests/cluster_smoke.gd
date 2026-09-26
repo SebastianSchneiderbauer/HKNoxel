@@ -122,6 +122,20 @@ func _test_fast_open_propagation() -> void:
 	map.clusterBakeData = NoxelClusterStorage.new()
 	map.clusterBakeData.build(map.wallBakeData, dimensions, 5)
 	manager.setCurrentNMap(map)
+	var console: Node = root.get_node_or_null("HKConsole")
+	_expect(console != null and console.commands.has("debugchunks"), "HKConsole should register debugchunks")
+	if console != null and console.commands.has("debugchunks"):
+		var old_cheat_mode: bool = console.cheatMode
+		console.cheatMode = true
+		console.executeCommand("debugchunks")
+		var debug_mesh: MultiMeshInstance3D = manager.get("_cluster_debug_mesh")
+		_expect(debug_mesh != null and debug_mesh.multimesh.instance_count == 3, "debugchunks should draw one cube per cluster")
+		if debug_mesh:
+			_expect(debug_mesh.multimesh.mesh.get_surface_count() == 1, "debug chunks should have one wireframe surface")
+		_expect(manager._positionOf(0) == Vector3(2.5, 2.5, 2.5), "debug cube center should match the baked cluster")
+		console.executeCommand("debugchunks")
+		console.cheatMode = old_cheat_mode
+		_expect(manager.get("_cluster_debug_mesh") == null, "debugchunks should remove the outlines when toggled off")
 	var source_id: int = manager.register_source(manager)
 	manager.emitSound(Vector3(0.5, 0.5, 0.5), 15, source_id)
 	manager.simulateSound()
@@ -130,10 +144,14 @@ func _test_fast_open_propagation() -> void:
 	_expect(manager.getNoxelInformation(Vector3(12.5, 2.5, 2.5)).x == 0.0, "sound must not cross two edges in one tick")
 	manager.simulateSound()
 	_expect(manager.getNoxelInformation(Vector3(12.5, 2.5, 2.5)).x > 0.0, "sound should reach the third large cube in two ticks")
+	manager.setClusterVisualization(true)
 	map.wallBakeData.updateWall(7 + 2 * dimensions.x + 2 * dimensions.x * dimensions.y, true)
 	manager.simulateSound()
 	_expect(manager.activeClusterIds.is_empty(), "changing a wall should rebuild clusters and clear old sound")
 	_expect(manager.getNoxelInformation(Vector3(7.5, 2.5, 2.5)) == Vector2.ZERO, "new wall should block its exact fine position")
+	var rebuilt_mesh: MultiMeshInstance3D = manager.get("_cluster_debug_mesh")
+	_expect(rebuilt_mesh != null and rebuilt_mesh.multimesh.instance_count == manager.clusters.cluster_sides.size(), "debug chunks should refresh after a wall edit")
+	manager.setClusterVisualization(false)
 	manager.free_source(source_id)
 	manager.removeCurrentNmap()
 
