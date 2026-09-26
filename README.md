@@ -1,4 +1,4 @@
-# <img width="32" height="32" alt="icon png big" src="https://github.com/user-attachments/assets/d7ca0ee4-962a-4499-ab53-8452f1cf576a" /> HKNoxel 
+# <img width="32" height="32" alt="image" src="https://github.com/user-attachments/assets/8e78bb90-1c94-4706-ae5e-18927339bb3d" /> HKNoxel 
 
 in VERY EARLY stages of development. this version works, but will almost certainly have problems
 
