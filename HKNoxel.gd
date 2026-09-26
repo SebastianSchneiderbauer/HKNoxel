@@ -5,12 +5,16 @@ extends Node3D
 
 ## The size of the sound voxels.
 @export var cell_size: float = 1
+## Maximum cube width in map units. At cell_size 1 this permits 5-cell cubes;
+## at cell_size 0.5 it permits 10-cell cubes.
+@export_range(0.5, 32.0, 0.5) var max_cluster_width: float = 5.0
 ## What the baking process sees as walls. Its recommended to have seperate layers for decoration and actual walls, so props dont block Noxels
 @export_flags_3d_physics var wall_collision_mask: int = 1
 ## The node that defines the bounding box of the map. Merges its childrens AABBs, so make sure there are actual providers as children.
 @export var AABBProvider: Node3D
 @export_category("DO NOT TOUCH")
 @export var wallBakeData : NoxelWallStorage
+@export var clusterBakeData : NoxelClusterStorage
 @export var vGridDimensions: Vector3i # the dimensions of our voxelgrid. exported so a bake done in the editor (or baked into a packed/saved scene) survives reload
 @export var vGridStartPosition: Vector3 # same reasoning as vGridDimensions - the manager reads this for its index/position math
 
@@ -28,6 +32,9 @@ func bake_sound_grid(debug: bool = false) -> void:
 	# get dimensions
 	if not AABBProvider:
 		printerr("no AABBProvider was provided")
+		return
+	if cell_size <= 0.0:
+		printerr("cell_size must be greater than zero")
 		return
 	var dimensions : AABB = _get_node_aabb(AABBProvider)
 	vGridStartPosition = dimensions.position
@@ -54,7 +61,7 @@ func bake_sound_grid(debug: bool = false) -> void:
 						_debug_positions.push_back(vGridStartPosition + Vector3(x,y,z) * cell_size + Vector3(cell_size/2, cell_size/2, cell_size/2))
 		
 		# yield periodically so the engine doesn't freeze on large grids and progress can be shown
-		var progress := float(z + 1) / float(vGridDimensions.z)
+		var progress := 0.9 * float(z + 1) / float(vGridDimensions.z)
 		bake_progress.emit(progress)
 		
 		# regularly let the user know the bake is still going, without spamming every layer
@@ -65,6 +72,14 @@ func bake_sound_grid(debug: bool = false) -> void:
 		
 		if tree:
 			await tree.process_frame
+
+	# Keep the fine wall grid for exact wall and position queries. Only free cells
+	# are grouped into cubes; all runtime connections are baked from shared faces.
+	var max_side_cells: int = maxi(1, floori(max_cluster_width / cell_size))
+	clusterBakeData = NoxelClusterStorage.new()
+	clusterBakeData.build(wallBakeData, vGridDimensions, max_side_cells)
+	bake_progress.emit(1.0)
+	print("baked " + str(clusterBakeData.cluster_sides.size()) + " clusters and " + str(clusterBakeData.neighbor_ids.size()) + " directed connections")
 	
 	if debug:
 		print("DEBUG MODE: creating debug-meshes now")

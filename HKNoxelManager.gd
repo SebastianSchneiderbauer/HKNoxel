@@ -1,123 +1,156 @@
 extends Node
-# NOTE: these comments looks HELLA ai generated, but im lwk too lazy, so fuck you
-var currentNoxelMap
-func _exists() -> bool:
-	if currentNoxelMap:
-		return true
-	else:
-		return false
-func setCurrentNMap(nm, reset : bool = true) -> void:
-	print("reveived NOXELMAP update. update: " + str(reset))
-	currentNoxelMap = nm
-	
-	if reset:
-		_resetMaps()
-func removeCurrentNmap():
-	currentNoxelMap = null
 
+const SOUND_FLOOR: float = 0.1
+const CONFINEMENT_DEDUCTION: float = 0.4
+const CONSTANT_DEDUCTION_MULTIPLIER: float = 0.95
+
+var currentNoxelMap
 var walls: NoxelWallStorage
+var clusters: NoxelClusterStorage
+var dimensions: Vector3i
+var gridStartPosition: Vector3
+var cellSize: float
+var cellCount: int
+
+# Sound is stored once per free cluster, while position and wall queries still
+# resolve through the fine grid. Newly activated clusters run on the next tick.
 var soundLevel: PackedFloat32Array
 var emitter: PackedByteArray
-var dimensions: Vector3i
-
-var activeCellIds: Array[int]
-
-# Static connectivity: one byte per cell, with bits ordered +X, -X, +Y, -Y, +Z, -Z.
-var _neighbourMasks: PackedByteArray
-var _neighbourOffsets: PackedInt32Array
-var _neighbourDeductions: PackedFloat64Array
-var _cachedWallRevision: int = -1
-# Indexed by active-list position, retaining capacity as the cloud shrinks.
+var activeClusterIds: Array[int]
+var _activeFlags: PackedByteArray
 var _soundLevelSnapshot: PackedFloat32Array
+var _emitterSnapshot: PackedByteArray
+var _cachedWallRevision: int = -1
+var _cachedMaxSideCells: int = -1
+var _sideDeductions: PackedFloat32Array
 
-var gridStartPosition: Vector3
-var cellCount: int
-var cellSize: float
-
-# so everythign works together nicely
-func _resetMaps():
-	walls = currentNoxelMap.wallBakeData
-	print(walls._cellCount)
-	dimensions = currentNoxelMap.vGridDimensions
-	print(dimensions)
-	cellCount = dimensions.x * dimensions.y * dimensions.z
-	soundLevel.resize(cellCount)
-	soundLevel.fill(0) # theoredicly resize already does this, however not if the size is the exact same
-	emitter.resize(cellCount)
-	emitter.fill(0) # same as above
-	gridStartPosition = currentNoxelMap.vGridStartPosition
-	cellSize = currentNoxelMap.cell_size
-	_soundLevelSnapshot.clear()
-	_rebuildNeighbourCache()
-
-func _rebuildNeighbourCache() -> void:
-	var width: int = dimensions.x
-	var plane: int = dimensions.x * dimensions.y
-	_neighbourOffsets = PackedInt32Array([1, -1, width, -width, plane, -plane])
-	_neighbourMasks.resize(cellCount)
-	# Decode the baked wall bits once per candidate, without per-cell helper calls
-	# or temporary neighbour arrays. Boundaries prevent wrapping between rows/planes.
-	var wallBits: PackedByteArray = walls._wallInformation
-	for cellID: int in cellCount:
-		var x: int = cellID % width
-		var y: int = (cellID / width) % dimensions.y
-		var mask: int = 0
-		var neighbour: int = cellID + 1
-		if x + 1 < width and (wallBits[neighbour >> 3] & (1 << (neighbour & 7))) == 0:
-			mask |= 1
-		neighbour = cellID - 1
-		if x > 0 and (wallBits[neighbour >> 3] & (1 << (neighbour & 7))) == 0:
-			mask |= 2
-		neighbour = cellID + width
-		if y + 1 < dimensions.y and (wallBits[neighbour >> 3] & (1 << (neighbour & 7))) == 0:
-			mask |= 4
-		neighbour = cellID - width
-		if y > 0 and (wallBits[neighbour >> 3] & (1 << (neighbour & 7))) == 0:
-			mask |= 8
-		neighbour = cellID + plane
-		if neighbour < cellCount and (wallBits[neighbour >> 3] & (1 << (neighbour & 7))) == 0:
-			mask |= 16
-		neighbour = cellID - plane
-		if neighbour >= 0 and (wallBits[neighbour >> 3] & (1 << (neighbour & 7))) == 0:
-			mask |= 32
-		_neighbourMasks[cellID] = mask
-	_neighbourDeductions.resize(64)
-	for mask: int in 64:
-		var count: int = 0
-		for direction: int in 6:
-			if mask & (1 << direction):
-				count += 1
-		_neighbourDeductions[mask] = (float(count) / 6) * CONFINEMENT_DEDUCTION
-	_cachedWallRevision = walls.revision
-
-func _indexOf(objectPosition: Vector3) -> int: # ported from the Noxel
-	var relativePosition: Vector3 = objectPosition - gridStartPosition
-	var voxelPosition: Vector3 = (relativePosition / cellSize).floor()
-	return int(voxelPosition.x + voxelPosition.y * dimensions.x + voxelPosition.z * dimensions.x * dimensions.y)
-func _positionOf(index: int) -> Vector3:
-	if dimensions == Vector3i.ZERO:
-		printerr("cannot get position if dimensions were not specified")
-		return Vector3.ZERO
-	
-	var width := dimensions.x
-	var height := dimensions.y
-	
-	var x := index % width
-	var y := (index / width) % height
-	var z := index / (width * height)
-	
-	return gridStartPosition + Vector3(x, y, z) * cellSize
-
-# registration for sound emitting
 var _free_ids: Array[int] = []
 var _active_sources: Array[Node] = []
 var _freeQueue: PackedByteArray = []
 var _freeQueueDetector: PackedByteArray
 
+var TESTID: int = -1
+var _isDebug: bool = false
+var _debug_labels: Array[Label3D] = []
+
+
+func _exists() -> bool:
+	return currentNoxelMap != null
+
+
+func setCurrentNMap(nm, reset: bool = true) -> void:
+	currentNoxelMap = nm
+	if reset:
+		_resetMaps()
+	else:
+		_clearGrid()
+
+
+func removeCurrentNmap() -> void:
+	currentNoxelMap = null
+	_clearGrid()
+
+
+func _clearGrid() -> void:
+	# Once the field is discarded, staged source IDs can be reused safely.
+	for queued_id: int in _freeQueue:
+		if queued_id < _active_sources.size():
+			_active_sources[queued_id] = null
+			_free_ids.append(queued_id)
+	_freeQueue.clear()
+	walls = null
+	clusters = null
+	dimensions = Vector3i.ZERO
+	cellCount = 0
+	soundLevel.clear()
+	emitter.clear()
+	_activeFlags.clear()
+	activeClusterIds.clear()
+	_cachedWallRevision = -1
+	_cachedMaxSideCells = -1
+	_clear_debug_labels()
+
+
+func _resetMaps() -> void:
+	_clearGrid()
+	walls = currentNoxelMap.wallBakeData
+	dimensions = currentNoxelMap.vGridDimensions
+	if walls == null or dimensions.x <= 0 or dimensions.y <= 0 or dimensions.z <= 0:
+		push_error("HKNoxel: bake the wall grid before using the map")
+		return
+	cellCount = dimensions.x * dimensions.y * dimensions.z
+	if walls._cellCount != cellCount:
+		push_error("HKNoxel: wall bake dimensions do not match the map")
+		_clearGrid()
+		return
+	gridStartPosition = currentNoxelMap.vGridStartPosition
+	cellSize = currentNoxelMap.cell_size
+	if cellSize <= 0.0:
+		push_error("HKNoxel: cell_size must be greater than zero")
+		_clearGrid()
+		return
+	_rebuildClusterCache()
+
+
+func _rebuildClusterCache() -> void:
+	var max_side_cells: int = maxi(1, floori(currentNoxelMap.max_cluster_width / cellSize))
+	var baked: NoxelClusterStorage = currentNoxelMap.clusterBakeData
+	if baked != null and baked.is_compatible(walls, dimensions, max_side_cells):
+		clusters = baked
+	else:
+		clusters = NoxelClusterStorage.new()
+		clusters.build(walls, dimensions, max_side_cells)
+		# Older wall-only bakes and runtime wall changes can still run. An editor
+		# rebake is needed to serialize the generated cluster data in the scene.
+		if not Engine.is_editor_hint():
+			currentNoxelMap.clusterBakeData = clusters
+	var cluster_count: int = clusters.cluster_sides.size()
+	soundLevel.resize(cluster_count)
+	soundLevel.fill(0.0)
+	emitter.resize(cluster_count)
+	emitter.fill(0)
+	_activeFlags.resize(cluster_count)
+	_activeFlags.fill(0)
+	activeClusterIds.clear()
+	_cachedWallRevision = walls.revision
+	_cachedMaxSideCells = max_side_cells
+	_sideDeductions.resize(64)
+	for mask: int in 64:
+		var side_count: int = 0
+		for direction: int in 6:
+			if mask & (1 << direction):
+				side_count += 1
+		_sideDeductions[mask] = float(side_count) * CONFINEMENT_DEDUCTION / 6.0
+	_clear_debug_labels()
+
+
+func _indexOf(objectPosition: Vector3) -> int:
+	if cellCount == 0:
+		return -1
+	var fine_position: Vector3 = ((objectPosition - gridStartPosition) / cellSize).floor()
+	var x: int = int(fine_position.x)
+	var y: int = int(fine_position.y)
+	var z: int = int(fine_position.z)
+	if x < 0 or x >= dimensions.x or y < 0 or y >= dimensions.y or z < 0 or z >= dimensions.z:
+		return -1
+	return x + y * dimensions.x + z * dimensions.x * dimensions.y
+
+
+func _positionOf(cluster_id: int) -> Vector3:
+	var origin: int = clusters.cluster_origins[cluster_id]
+	var side: int = clusters.cluster_sides[cluster_id]
+	var x: int = origin % dimensions.x
+	var y: int = (origin / dimensions.x) % dimensions.y
+	var z: int = origin / (dimensions.x * dimensions.y)
+	return gridStartPosition + (Vector3(x, y, z) + Vector3.ONE * float(side) * 0.5) * cellSize
+
+
 func _ready() -> void:
-	_active_sources.resize(256) # hardcoding is fine here for once
-	for i in 256:
+	_active_sources.resize(256)
+	for i: int in 256:
 		_free_ids.append(i)
+
+
 func register_source(source: Node) -> int:
 	if _free_ids.is_empty():
 		push_error("HKNoxel: id pool exhausted")
@@ -125,215 +158,166 @@ func register_source(source: Node) -> int:
 	var id: int = _free_ids.pop_back()
 	_active_sources[id] = source
 	return id
+
+
 func free_source(id: int) -> void:
-	if not _freeQueue.has(id): 
-		_freeQueue.append(id) # we stage for deletion, since sound of that emitter could still be active and reassigned to other emitters in the worst case
+	if id < 0 or id >= _active_sources.size() or _active_sources[id] == null:
+		return
+	if clusters == null or activeClusterIds.is_empty():
+		_active_sources[id] = null
+		_free_ids.append(id)
+		return
+	if not _freeQueue.has(id):
+		_freeQueue.append(id)
+
+
 func get_source(id: int) -> Node:
 	if id < 0 or id >= _active_sources.size():
 		return null
 	return _active_sources[id]
 
-func _getFreeNeighbourIndexes(cellIndex: int) -> Array[int]: # this is a abomination and should be banished into the dephs of hell
-	# formula x + y * dim.x + z * dim.x * dim.y
-	var result : Array[int]
-	var x := cellIndex % dimensions.x
-	var y := (cellIndex / dimensions.x) % dimensions.y
-	
-	# x
-	if x + 1 < dimensions.x and _checkCellIndex(cellIndex + 1):
-		result.append(cellIndex + 1)
-	if x - 1 >= 0 and _checkCellIndex(cellIndex - 1):
-		result.append(cellIndex - 1)
-	
-	# y
-	if y + 1 < dimensions.y and _checkCellIndex(cellIndex + 1 * dimensions.x):
-		result.append(cellIndex + 1 * dimensions.x)
-	if y - 1 >= 0 and _checkCellIndex(cellIndex - 1 * dimensions.x):
-		result.append(cellIndex - 1 * dimensions.x)
-	
-	# z
-	if _checkCellIndex(cellIndex + 1 * dimensions.x * dimensions.y):
-		result.append(cellIndex + 1 * dimensions.x * dimensions.y)
-	if _checkCellIndex(cellIndex - 1 * dimensions.x * dimensions.y):
-		result.append(cellIndex - 1 * dimensions.x * dimensions.y)
-	
-	return result
-func _checkCellIndex(cellIndex: int) -> bool:
-	return cellIndex >= 0 and cellIndex < cellCount and not walls.isWall(cellIndex)
-const SOUND_FLOOR = 0.1
-## Used for emitting a sound at a position. Decibels is a integer that can take values storable in an unsigned byte. Fails if the emitterId is not valid or the position is outside of the baked NoxelMap
-func emitSound(startPosition: Vector3, decibels: int, emitterId: int):
-#region safety checks
-	# errors
+
+## Emits into the cluster containing startPosition. "decibels" is a game level,
+## not an acoustic decibel measurement.
+func emitSound(startPosition: Vector3, decibels: int, emitterId: int) -> void:
 	if decibels < SOUND_FLOOR:
 		printerr("too quiet")
 		return
-	if _free_ids.has(emitterId):
+	if get_source(emitterId) == null:
 		printerr("emitterID not registered")
 		return
-	var cellIndex := _indexOf(startPosition)
-	if cellIndex < 0 or cellIndex >= cellCount:
-		printerr("sound is out of this world: " + str(cellIndex) + " / " + str(cellCount)) # holy wording
+	var cell_index: int = _indexOf(startPosition)
+	if cell_index < 0:
+		printerr("sound is out of this world")
 		return
-	if walls.isWall(cellIndex):
+	var cluster_id: int = clusters.cell_to_cluster[cell_index]
+	if cluster_id < 0:
 		printerr("sound cannot be started in wall")
 		return
-	
-	# warning(s)
-	if decibels < 0 or decibels > 255:
-		var snapvalue := clamp(decibels, 0, 255)
-		print("WARNING: snapped decibel value of " + str(decibels) + " to " + str(snapvalue))
-		decibels = snapvalue
-	
-	var cellsCurrentSound = soundLevel[cellIndex]
-	if cellsCurrentSound > decibels:
-		return # no need in puttin a sound here that is weaker than the existing sound
-#endregion
-	# safety checks are done now, we can assume everything is safe (now watch me completely fuck it up)
-	soundLevel[cellIndex] = decibels
-	emitter[cellIndex] = emitterId
-	if not activeCellIds.has(cellIndex):
-		activeCellIds.append(cellIndex)
-		print("added sound as new active cell")
+	if decibels > 255:
+		print("WARNING: snapped decibel value of " + str(decibels) + " to 255")
+		decibels = 255
+	if soundLevel[cluster_id] > decibels:
+		return
+	soundLevel[cluster_id] = decibels
+	emitter[cluster_id] = emitterId
+	if _activeFlags[cluster_id] == 0:
+		_activeFlags[cluster_id] = 1
+		activeClusterIds.append(cluster_id)
 
-## Lets you check the sound level of a cell, as well as the emitters ID, auto-returns Vector2.ZERO on bad input
-func getNoxelInformation(wantedPosition: Vector3) -> Vector2 :
-	var posIndex := _indexOf(wantedPosition)
-	if not _checkCellIndex(posIndex):
+
+## Returns the cluster sound level and emitter ID at a fine-grid position.
+func getNoxelInformation(wantedPosition: Vector3) -> Vector2:
+	var cell_index: int = _indexOf(wantedPosition)
+	if cell_index < 0:
 		return Vector2.ZERO
-	
-	return Vector2(soundLevel[posIndex], emitter[posIndex])
+	var cluster_id: int = clusters.cell_to_cluster[cell_index]
+	if cluster_id < 0:
+		return Vector2.ZERO
+	return Vector2(soundLevel[cluster_id], emitter[cluster_id])
 
-const CONFINEMENT_DEDUCTION : float = 0.4
-const CONSTANT_DEDUCTION_MULTIPLIER : float = 0.95 
-var TESTID
-var _isDebug : bool = false
-func setDebugMode(debug: bool):
+
+func setDebugMode(debug: bool) -> void:
 	if _isDebug and not debug:
 		_clear_debug_labels()
 	_isDebug = debug
-func _physics_process(delta: float) -> void:
-	# we currently would only reach a sound-speed of 60 m/s, nowhere close to the 343 m/s of the actual speed of sound (also dependent on the cellsize)
-	# 2 options, either ignore it or simulate multiple spreads per tick (5.7 btw, fuck, just make it 6 atp.)
+
+
+func _physics_process(_delta: float) -> void:
 	if Input.is_action_just_pressed("ui_undo") and _isDebug:
-		print("Prepping sim")
-		if not TESTID:
+		if TESTID < 0:
 			TESTID = register_source(self)
-		emitSound(get_tree().get_first_node_in_group("player").global_position + Vector3.UP, 10, TESTID) # this assumes you have a player in a group called player
-	
-	if Input.is_action_just_pressed("ui_redo") or not _isDebug: # GIG, wie geil ist Dustin
+		var player: Node3D = get_tree().get_first_node_in_group("player") as Node3D
+		if player:
+			emitSound(player.global_position + Vector3.UP, 10, TESTID)
+	if Input.is_action_just_pressed("ui_redo") or not _isDebug:
 		simulateSound(_isDebug)
+
+
 func simulateSound(generateDebug: bool = false) -> void:
-	var debug_start_usec := Time.get_ticks_usec() if generateDebug else 0
-	if walls and _cachedWallRevision != walls.revision:
-		_rebuildNeighbourCache()
-	
-	# reset freeing detector Array
+	var debug_start_usec: int = Time.get_ticks_usec() if generateDebug else 0
+	if walls == null or clusters == null:
+		return
+	if _cachedWallRevision != walls.revision or _cachedMaxSideCells != maxi(1, floori(currentNoxelMap.max_cluster_width / cellSize)):
+		_rebuildClusterCache()
+
+	var active_count: int = activeClusterIds.size()
+	if _soundLevelSnapshot.size() < active_count:
+		var capacity: int = maxi(active_count, maxi(1, _soundLevelSnapshot.size() * 2))
+		_soundLevelSnapshot.resize(capacity)
+		_emitterSnapshot.resize(capacity)
+	for i: int in active_count:
+		var cluster_id: int = activeClusterIds[i]
+		_soundLevelSnapshot[i] = soundLevel[cluster_id]
+		_emitterSnapshot[i] = emitter[cluster_id]
+
+	# Decay the old field first. Incoming sound then competes with the decayed
+	# value, so processing order cannot erase a stronger arrival in this tick.
+	for i: int in active_count:
+		var cluster_id: int = activeClusterIds[i]
+		var decayed: float = _soundLevelSnapshot[i] * CONSTANT_DEDUCTION_MULTIPLIER
+		if decayed >= SOUND_FLOOR:
+			soundLevel[cluster_id] = decayed
+		else:
+			soundLevel[cluster_id] = 0.0
+			emitter[cluster_id] = 0
+
+	for i: int in active_count:
+		var source_id: int = activeClusterIds[i]
+		var deduction_per_cell: float = _sideDeductions[clusters.open_side_masks[source_id]]
+		if deduction_per_cell == 0.0:
+			continue
+		for edge: int in range(clusters.neighbor_offsets[source_id], clusters.neighbor_offsets[source_id + 1]):
+			var destination_id: int = clusters.neighbor_ids[edge]
+			var candidate: float = _soundLevelSnapshot[i] - deduction_per_cell * clusters.cluster_sides[destination_id]
+			if candidate < SOUND_FLOOR or candidate <= soundLevel[destination_id]:
+				continue
+			soundLevel[destination_id] = candidate
+			emitter[destination_id] = _emitterSnapshot[i]
+			if _activeFlags[destination_id] == 0:
+				_activeFlags[destination_id] = 1
+				activeClusterIds.append(destination_id)
+
+	# Only the old portion may have gone inactive. Swap removal keeps the list
+	# compact without sorting or shifting a large active cloud.
+	for i: int in range(active_count - 1, -1, -1):
+		var cluster_id: int = activeClusterIds[i]
+		if soundLevel[cluster_id] != 0.0:
+			continue
+		_activeFlags[cluster_id] = 0
+		activeClusterIds[i] = activeClusterIds[activeClusterIds.size() - 1]
+		activeClusterIds.pop_back()
+
 	_freeQueueDetector.resize(256)
 	_freeQueueDetector.fill(0)
-	
-	# only the currently active cells can change this tick, so we only need their pre-tick values,
-	# not a copy of the whole (potentially huge) grid
-	var activeCount: int = activeCellIds.size()
-	if _soundLevelSnapshot.size() < activeCount:
-		_soundLevelSnapshot.resize(maxi(activeCount, _soundLevelSnapshot.size() * 2))
-	for indexCounter: int in activeCount:
-		_soundLevelSnapshot[indexCounter] = soundLevel[activeCellIds[indexCounter]]
-	var cellsToActivate: Array[int]
-	var cellsToDeactivate: Array[int]
-	for indexCounter: int in activeCount:
-		var cellID: int = activeCellIds[indexCounter]
-		# spreading logic
-		var emitterID: int = emitter[cellID]
-		var neighbourMask: int = _neighbourMasks[cellID]
-		var currentSoundLevel: float = _soundLevelSnapshot[indexCounter] # pre tick data that was not edited by another cell
-		var newSoundLevel: float = currentSoundLevel - _neighbourDeductions[neighbourMask]
-		if newSoundLevel < SOUND_FLOOR: # we DO NOT have to pass on a sound that would make a cell delete itself again
-			soundLevel[cellID] = 0
-			emitter[cellID] = 0
-			cellsToDeactivate.append(indexCounter)
-			continue
-		for direction: int in 6:
-			if (neighbourMask & (1 << direction)) == 0:
-				continue
-			var neighbourCellID: int = cellID + _neighbourOffsets[direction]
-			var neighbourSoundLevel: float = soundLevel[neighbourCellID]
-			if newSoundLevel <= neighbourSoundLevel:
-				continue
-			
-			emitter[neighbourCellID] = emitterID
-			soundLevel[neighbourCellID] = newSoundLevel
-			if neighbourSoundLevel == 0: # cell was previously not active
-				cellsToActivate.append(neighbourCellID)
-		
-		# percentage decrease of each cell
-		if currentSoundLevel * CONSTANT_DEDUCTION_MULTIPLIER >= SOUND_FLOOR:
-			soundLevel[cellID] = currentSoundLevel * CONSTANT_DEDUCTION_MULTIPLIER
+	for cluster_id: int in activeClusterIds:
+		_freeQueueDetector[emitter[cluster_id]] = 1
+	var still_pending: PackedByteArray
+	for queued_id: int in _freeQueue:
+		if _freeQueueDetector[queued_id] == 0:
+			_active_sources[queued_id] = null
+			_free_ids.append(queued_id)
 		else:
-			soundLevel[cellID] = 0
-			emitter[cellID] = 0
-			cellsToDeactivate.append(indexCounter)
-		
-		# deletion logic
-		_freeQueueDetector[emitterID] = 1
-	if generateDebug:
-		print("went over " + str(activeCellIds.size()) + " cells")
-	
-	# adding all new cells
-	for cellID in cellsToActivate: # we cannot have duplicates here, since they are not inserted into cellsToActivate
-		activeCellIds.append(cellID)
-	if generateDebug:
-		print("added over " + str(cellsToActivate.size()) + " active cells")
-	
-	# removin deleted cells
-	if generateDebug:
-		print(cellsToDeactivate.size())
-	if cellsToDeactivate.size() != 0:
-		cellsToDeactivate.sort()
-		cellsToDeactivate.reverse()
-	for cellIndex in cellsToDeactivate:
-		# swap delete for performence
-		var lastIndex = activeCellIds.size() - 1
-		var storage = activeCellIds[lastIndex]
-		activeCellIds[lastIndex] = activeCellIds[cellIndex]
-		activeCellIds[cellIndex] = storage
-		activeCellIds.pop_back()
-	if generateDebug:
-		print("removed over " + str(cellsToDeactivate.size()) + " active cells")
-	
-	# deletion logic for emitterIds
-	var stillPending: PackedByteArray = []
-	for queuedId in _freeQueue:
-		if _freeQueueDetector[queuedId] == 0:
-			_active_sources[queuedId] = null
-			_free_ids.append(queuedId)
-		else:
-			stillPending.append(queuedId)
-	if Input.is_action_just_pressed("c"):
-		print(_freeQueueDetector)
-	_freeQueue = stillPending
+			still_pending.append(queued_id)
+	_freeQueue = still_pending
 
-	
-	# if we want debugging visuals, create them
 	if generateDebug:
-		var elapsed_usec := Time.get_ticks_usec() - debug_start_usec
-		print("simulateSound took " + str(elapsed_usec / 1000.0) + " ms (excluding debug label placement)")
-		print("now generating debug")
+		print("simulateSound processed " + str(active_count) + " clusters in " + str((Time.get_ticks_usec() - debug_start_usec) / 1000.0) + " ms")
 		debug_visualize_active_cells()
 
-# debugging stuff, not needed afterwards
-var _debug_labels: Array[Label3D] = []
-func debug_visualize_active_cells() -> void:#
+
+func debug_visualize_active_cells() -> void:
 	_clear_debug_labels()
-	for cellID in activeCellIds:
+	for cluster_id: int in activeClusterIds:
 		var label := Label3D.new()
-		label.text = "%.1f" % soundLevel[cellID]
-		label.position = _positionOf(cellID) + Vector3(cellSize/2, cellSize/2, cellSize/2)
-		#label.pixel_size = 0.01  # tune for readability at your cell scale
+		label.text = "%.1f" % soundLevel[cluster_id]
+		label.position = _positionOf(cluster_id)
 		label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 		add_child(label)
 		_debug_labels.append(label)
+
+
 func _clear_debug_labels() -> void:
-	for label in _debug_labels:
+	for label: Label3D in _debug_labels:
 		label.queue_free()
 	_debug_labels.clear()
