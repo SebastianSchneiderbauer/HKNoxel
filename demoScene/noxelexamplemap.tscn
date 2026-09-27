@@ -194,6 +194,7 @@ const RESET_ROTATION_Y: float = 0.0
 func _physics_process(delta: float) -> void:
 	$VBoxContainer.scale = Vector2(1, 1) * (float(get_window().content_scale_size.y)/648)
 	
+	# camera animation stuff, not important if you wanna learn how to use HKNoxel
 	if is_resetting:
 		reset_progress = minf(reset_progress + delta / RESET_DURATION, 1.0)
 		var weight := smoothstep(0.0, 1.0, reset_progress)
@@ -204,6 +205,7 @@ func _physics_process(delta: float) -> void:
 			is_resetting = false
 		return
 	
+	# camera animation stuff, not important if you wanna learn how to use HKNoxel
 	if Input.is_action_pressed(\"ui_up\"):
 		position.x += speed*5 * delta
 	if Input.is_action_pressed(\"ui_left\"):
@@ -217,6 +219,7 @@ func _physics_process(delta: float) -> void:
 	if Input.is_action_pressed(\"ui_cancel\"):
 		position.y += speed*5 * delta
 	
+	# HOW TO USE HKNOXEL
 	if Input.is_action_just_pressed(\"ui_undo\"):
 		is_resetting = true
 		reset_progress = 0.0
@@ -224,9 +227,10 @@ func _physics_process(delta: float) -> void:
 		reset_start_rotation_y = $\"..\".rotation.y
 	if Input.is_action_just_pressed(\"ui_redo\"): # THIS SPAWNS A SOUND!!!!!
 		if not HKNoxelEmitterID:
-			HKNoxelEmitterID = HKNoxelManager.register_source(self)
+			HKNoxelEmitterID = HKNoxelManager.register_source(self) # each sound needs an registered emitter, who gets an individual ID to sign sounds with
 		HKNoxelManager.emitSound(Vector3(0, 1.5, 0), 5, HKNoxelEmitterID) # the \"decibels\" are way out of proportion, being way louder
 	
+	# camera animation stuff, not important if you wanna learn how to use HKNoxel
 	look_at(Vector3.ZERO)
 
 var HKNoxelEmitterID
