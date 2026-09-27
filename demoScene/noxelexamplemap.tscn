@@ -249,6 +249,8 @@ The NoxelMap Node is the hearth of this addon. Place it in the scene, select the
 
 Next just click on the NoxelMap node, and press on \"Bake sound grid\" or Bake with debug Visualisation\" or just call the internal method via script. It has signals for progress btw.
 
+To see how to check sound at a specific location, check the \"debugMesh.tscn\" scene.
+
 If you are cool and also Installed HKConsole, the node also registers the \"debugchunks\" command, toggeling a view of the generated Clusters. It is hidden and a cheat, so you need cheat mode in the console."
 
 [node name="Map" type="Node3D" parent="." unique_id=344768976]
