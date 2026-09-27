@@ -1,34 +1,39 @@
 # <img width="32" height="32" alt="image" src="https://github.com/user-attachments/assets/8e78bb90-1c94-4706-ae5e-18927339bb3d" /> HKNoxel 
 
-in VERY EARLY stages of development. this version works, but will almost certainly have problems
+version 2.0 of my noise propagation system
 
 a godot addon which adds the capability for voxel based noise propagation
 
-- intended to be used for making enemies react to sound you emit (footsteps, gunshots, etc.)
-- not intended for actually playing or simulation physically accurate sounds, as it is not completely realistic
-	- walls completely drown out the sound, dampening is not implemented
-	- spreading is not based on physics (see visualization below)
 <details open>
   <summary>intended for:</summary>
    
-	triggering behavior based on player sounds (like enemies reacting to footsteps, gunshots, etc.)
+	- triggering behavior based on player sounds (like enemies reacting to footsteps, gunshots, etc.)
+	- being used only in 3D environments
 </details>
 <details open>
   <summary>not intended for:</summary>
    
-	⚠️ simulating actual sound (reflections, echos, etc.)
-	⚠️ actually playing sounds
+	- simulating actual sound (reflections, echos, etc.)
+	- actually playing sounds
 </details>
 
 Demo scene included, just check the files once they are installed in the addons folder.
-just make sure: the addon is activated, HKNoxelManager is set as a global named "HKNoxelManager"
+Just make sure: 
+1) the addon is activated
+2) KNoxelManager is set as a global named "HKNoxelManager"
+3) check demo scene for a tutorial on how to set it up
 
-## Clustered bake
+## How do i use this?
+Add a `NoxelMapThe` Node in your scene. The first 4 properties are fine to toy around with, while the presets for `Cell Size` and `Max Cluster` are valid and do not need adjustment.
+Everything below the `DO NOT TOUCH` point should **never be touched** under any circumstance.
+This plugin requires you to bake so called `Noxels` once before you start the level. For an example, check the example scene that ships with it. A thourough explanation of the steps is below:
 
-NoxelMap still checks walls at `cell_size` resolution. After that, the bake greedily groups free cells into non-overlapping cubes and records all face-adjacent cluster connections. Set `max_cluster_width` in map units to limit the cubes: the default width of 5 permits 5x5x5 cubes with `cell_size = 1`, or 10x10x10 cubes with `cell_size = 0.5`. Narrow passages stay at the fine resolution. Save the scene after baking to keep `clusterBakeData` with the wall bake; older wall-only bakes build clusters when the map loads.
+## How does this work?
+For this we assume that `Cell Size` and `Max Cluster` are set to their default value `1` and `5`.
+1) First, the world is divided into tiny Chunks of the size of `1`, so the plugin can detect walls the sound **cannot** go threw
+<img width="1120" height="640" alt="WallDetector" src="https://github.com/user-attachments/assets/0e0f4030-4b5b-425b-85b7-c491c45152f5" />
 
-Runtime sound levels and emitter IDs are stored per cluster. A wave travels one connection per physics tick, so large open cubes pass information quickly and fine cells in tight spaces pass it more slowly. A one-cell cluster retains the old six-side spread cost. Larger cubes charge `0.4 × (side length - 1 + connected faces / 6)` when spreading out: internal free steps are approximated at the full open-cell rate, and each connected outer face counts once, even if it touches many clusters. A cluster has one sound level and one emitter ID throughout its volume.
+2) After this, an algorythm searches for Noxels which can be merged into `Clusters`. These are stricly 3 dimensional `Cubes`, having the dimensions of 1x1x1, 2x2x2, 3x3x3, 4x4x4 or 5x5x5 (depending on your `Max Cluster`). This way up to `125` Noxels are merged into `1`, saving tons of computing power.
+<img width="1120" height="640" alt="Chunker" src="https://github.com/user-attachments/assets/1e916f13-4e9c-4074-b40a-9622bdd75596" />
 
-Changing baked walls at runtime rebuilds the clusters and clears current sound, because the old cluster IDs no longer describe the map. Re-bake after changing `cell_size`, `max_cluster_width`, or level geometry to persist the new graph. The fine-cell lookup and baked connections increase scene or resource file size in exchange for less work during propagation.
-
-In projects with HKConsole, the secret cheat command `debugchunks` toggles wireframe outlines of every free cluster. Small cubes are cyan and larger cubes shift toward orange. The outlines use one MultiMesh and update when the cluster bake changes. The existing `debugsound` command remains available independently: `ui_undo` emits a test sound and `ui_redo` advances one propagation tick while that mode is enabled. Both debug modes can be used together.
+3) As a final performence buff, neighbours of Clusters are also baked, so sound spreading from Cluster to Cluster is even more effortless
