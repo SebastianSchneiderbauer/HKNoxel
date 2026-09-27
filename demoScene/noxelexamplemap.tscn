@@ -467,6 +467,8 @@ layout_mode = 2
 text = "CONTROLLS:
 - use ARROW-KEYS
    to move the camera
+- use ESC and SPACE to go 
+   up and down with the cam
 - use CTRL + Z to reset camera
 - press CTRL + Y to emit
    a sound"
