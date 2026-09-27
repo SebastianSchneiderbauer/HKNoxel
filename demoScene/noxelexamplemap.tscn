@@ -236,12 +236,12 @@ var HKNoxelEmitterID
 ambient_light_source = 2
 ambient_light_color = Color(1, 1, 1, 1)
 
-[node name="Example" type="Node3D" unique_id=399325577]
+[node name="README" type="Node3D" unique_id=399325577]
 editor_description = "This is an example of how to set up HKNoxel.
 
 the \"Map\" part can be anything you build or import, as long as it can provide a AABB for the whole map (yellow box around your map). For a more clear view, i recoomend collapsing the \"Map\" Node.
 
-The NoxelMap Node is the hearth of this addon. Place it in the scene, select the collision layer of your walls and select the AABB provider (as previously discussed, a node that contains the map as its children. Theoredicly, the \"Example\" node could also be put in)
+The NoxelMap Node is the hearth of this addon. Place it in the scene, select the collision layer of your walls and select the AABB provider (as previously discussed, a node that contains the map as its children. Theoredicly, the \"README\" node could also be put in)
 
 Next just click on the NoxelMap node, and press on \"Bake sound grid\" or Bake with debug Visualisation\" or just call the internal method via script. It has signals for progress btw.
 
