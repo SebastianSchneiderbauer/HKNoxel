@@ -1,13 +1,13 @@
 # <img width="32" height="32" alt="image" src="https://github.com/user-attachments/assets/8e78bb90-1c94-4706-ae5e-18927339bb3d" /> HKNoxel 
 
-in VERY EARLY stages of development. this version works, but will almost certainly have problems
+version 2.0 of my noise propagation system
 
 a godot addon which adds the capability for voxel based noise propagation
 
 - intended to be used for making enemies react to sound you emit (footsteps, gunshots, etc.)
 - not intended for actually playing or simulation physically accurate sounds, as it is not completely realistic
 	- walls completely drown out the sound, dampening is not implemented
-	- spreading is not based on physics (see visualization below)
+	- spreading is not based on physics, amd rather simple
 <details open>
   <summary>intended for:</summary>
    
@@ -21,7 +21,10 @@ a godot addon which adds the capability for voxel based noise propagation
 </details>
 
 Demo scene included, just check the files once they are installed in the addons folder.
-just make sure: the addon is activated, HKNoxelManager is set as a global named "HKNoxelManager"
+Just make sure: 
+1) the addon is activated
+2) KNoxelManager is set as a global named "HKNoxelManager"
+3) check demo scene for a tutorial on how to set it up
 
 ## Clustered bake
 
