@@ -179,7 +179,7 @@ wall_checksum = 3408389736
 script/source = "extends Camera3D
 
 # THIS SCRIPT MOSTLY MANAGES CAMERA ROTATION
-# IF YOU WANT TO SEE HOW TO USE HKNOXEL, LOOK AT LINE 47 <----------------
+# IF YOU WANT TO SEE HOW TO USE HKNOXEL, LOOK AT LINE 50 <----------------
 
 var speed: float = 1
 var is_resetting: bool = false
@@ -218,13 +218,13 @@ func _physics_process(delta: float) -> void:
 		position.y -= speed*5 * delta
 	if Input.is_action_pressed(\"ui_cancel\"):
 		position.y += speed*5 * delta
-	
-	# HOW TO USE HKNOXEL
 	if Input.is_action_just_pressed(\"ui_undo\"):
 		is_resetting = true
 		reset_progress = 0.0
 		reset_start_position = position
 		reset_start_rotation_y = $\"..\".rotation.y
+	
+	# HOW TO USE HKNOXEL
 	if Input.is_action_just_pressed(\"ui_redo\"): # THIS SPAWNS A SOUND!!!!!
 		if not HKNoxelEmitterID:
 			HKNoxelEmitterID = HKNoxelManager.register_source(self) # each sound needs an registered emitter, who gets an individual ID to sign sounds with
