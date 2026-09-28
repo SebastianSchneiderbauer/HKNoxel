@@ -23,7 +23,7 @@ var _emitterSnapshot: PackedByteArray
 var _cachedWallRevision: int = -1
 var _cachedMaxSideCells: int = -1
 var _sideDeductions: PackedFloat32Array
-var _clusterTravelDeductions: PackedFloat32Array
+var _edgeTravelDeductions: PackedFloat32Array
 
 var _free_ids: Array[int] = []
 var _active_sources: Array[Node] = []
@@ -103,7 +103,7 @@ func _rebuildClusterCache() -> void:
 		# rebake is needed to serialize the generated cluster data in the scene.
 		if not Engine.is_editor_hint():
 			currentNoxelMap.clusterBakeData = clusters
-	var cluster_count: int = clusters.cluster_sides.size()
+	var cluster_count: int = clusters.get_cluster_count()
 	soundLevel.resize(cluster_count)
 	soundLevel.fill(0.0)
 	emitter.resize(cluster_count)
@@ -120,12 +120,16 @@ func _rebuildClusterCache() -> void:
 			if mask & (1 << direction):
 				side_count += 1
 		_sideDeductions[mask] = float(side_count) * CONFINEMENT_DEDUCTION / 6.0
-	_clusterTravelDeductions.resize(cluster_count)
+	_edgeTravelDeductions.resize(clusters.neighbor_ids.size())
 	for cluster_id: int in cluster_count:
-		# A cube's internal free steps used to be individual noxels. Approximate
-		# those steps at the six-neighbor rate, then charge its exposed faces.
-		var internal_steps: int = clusters.cluster_sides[cluster_id] - 1
-		_clusterTravelDeductions[cluster_id] = float(internal_steps) * CONFINEMENT_DEDUCTION + _sideDeductions[clusters.open_side_masks[cluster_id]]
+		var side_deduction: float = _sideDeductions[clusters.open_side_masks[cluster_id]]
+		for edge: int in range(clusters.neighbor_offsets[cluster_id], clusters.neighbor_offsets[cluster_id + 1]):
+			# Sound leaving through a face has crossed the box along that face's
+			# axis. Those cells used to be individual noxels, so charge the steps
+			# at the six-neighbor rate, then charge the box's exposed faces.
+			var axis: int = clusters.neighbor_directions[edge] >> 1
+			var internal_steps: int = clusters.cluster_sizes[cluster_id * 3 + axis] - 1
+			_edgeTravelDeductions[edge] = float(internal_steps) * CONFINEMENT_DEDUCTION + side_deduction
 	_clear_debug_labels()
 	if _showClusterDebug:
 		_build_cluster_visualization()
@@ -141,13 +145,15 @@ func _indexOf(objectPosition: Vector3) -> int:
 		return -1
 	return x + y * dimensions.x + z * dimensions.x * dimensions.y
 
+func _sizeOf(cluster_id: int) -> Vector3i:
+	return Vector3i(clusters.cluster_sizes[cluster_id * 3], clusters.cluster_sizes[cluster_id * 3 + 1], clusters.cluster_sizes[cluster_id * 3 + 2])
+
 func _positionOf(cluster_id: int) -> Vector3:
 	var origin: int = clusters.cluster_origins[cluster_id]
-	var side: int = clusters.cluster_sides[cluster_id]
 	var x: int = origin % dimensions.x
 	var y: int = (origin / dimensions.x) % dimensions.y
 	var z: int = origin / (dimensions.x * dimensions.y)
-	return gridStartPosition + (Vector3(x, y, z) + Vector3.ONE * float(side) * 0.5) * cellSize
+	return gridStartPosition + (Vector3(x, y, z) + Vector3(_sizeOf(cluster_id)) * 0.5) * cellSize
 
 func _ready() -> void:
 	_active_sources.resize(256)
@@ -184,10 +190,10 @@ func setClusterVisualization(visible: bool) -> void:
 
 func _build_cluster_visualization() -> void:
 	_clear_cluster_visualization()
-	if clusters == null or clusters.cluster_sides.is_empty():
+	if clusters == null or clusters.get_cluster_count() == 0:
 		return
 	
-	# A unit wire cube is scaled and placed once per cluster by a MultiMesh.
+	# A unit wire cube is scaled and placed once per cluster box by a MultiMesh.
 	# Lines make the partition visible without hiding the level geometry.
 	var material := StandardMaterial3D.new()
 	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -210,13 +216,14 @@ func _build_cluster_visualization() -> void:
 	instances.transform_format = MultiMesh.TRANSFORM_3D
 	instances.use_colors = true
 	instances.mesh = wire_cube
-	instances.instance_count = clusters.cluster_sides.size()
+	instances.instance_count = clusters.get_cluster_count()
 	var max_side: int = maxi(1, clusters.max_side_cells)
-	for cluster_id: int in clusters.cluster_sides.size():
-		var side: int = clusters.cluster_sides[cluster_id]
-		var width: float = float(side) * cellSize * 0.98
-		instances.set_instance_transform(cluster_id, Transform3D(Basis().scaled(Vector3.ONE * width), _positionOf(cluster_id)))
-		var fraction: float = float(side - 1) / float(maxi(1, max_side - 1))
+	for cluster_id: int in clusters.get_cluster_count():
+		var size: Vector3i = _sizeOf(cluster_id)
+		instances.set_instance_transform(cluster_id, Transform3D(Basis().scaled(Vector3(size) * cellSize * 0.98), _positionOf(cluster_id)))
+		# Color by the side of a cube with the same volume, so flat slabs read as mid-sized.
+		var equivalent_side: float = pow(float(size.x * size.y * size.z), 1.0 / 3.0)
+		var fraction: float = clampf((equivalent_side - 1.0) / float(maxi(1, max_side - 1)), 0.0, 1.0)
 		instances.set_instance_color(cluster_id, Color.from_hsv(0.55 - 0.50 * fraction, 0.9, 1.0))
 	
 	_cluster_debug_mesh = MultiMeshInstance3D.new()
@@ -336,12 +343,9 @@ func simulateSound(generateDebug: bool = false) -> void:
 	
 	for i: int in active_count:
 		var source_id: int = activeClusterIds[i]
-		var travel_deduction: float = _clusterTravelDeductions[source_id]
-		if travel_deduction == 0.0:
-			continue
 		for edge: int in range(clusters.neighbor_offsets[source_id], clusters.neighbor_offsets[source_id + 1]):
 			var destination_id: int = clusters.neighbor_ids[edge]
-			var candidate: float = _soundLevelSnapshot[i] - travel_deduction
+			var candidate: float = _soundLevelSnapshot[i] - _edgeTravelDeductions[edge]
 			if candidate < SOUND_FLOOR or candidate <= soundLevel[destination_id]:
 				continue
 			soundLevel[destination_id] = candidate

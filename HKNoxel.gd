@@ -5,8 +5,8 @@ extends Node3D
 
 ## The size of the sound voxels.
 @export var cell_size: float = 1
-## Maximum cube width in map units. At cell_size 1 this permits 5-cell cubes;
-## at cell_size 0.5 it permits 10-cell cubes.
+## Maximum cluster side in map units, per axis. At cell_size 1 this permits
+## boxes up to 5 cells per side; at cell_size 0.5 up to 10 cells.
 @export_range(0.5, 32.0, 0.5) var max_cluster_width: float = 5.0
 ## What the baking process sees as walls. Its recommended to have seperate layers for decoration and actual walls, so props dont block Noxels
 @export_flags_3d_physics var wall_collision_mask: int = 1
@@ -23,7 +23,16 @@ signal chunk_progress(progress: float)
 signal bake_complete()
 
 var _debug_positions: PackedVector3Array
+var _is_baking: bool = false
 func bake_sound_grid(debug: bool = false) -> void:
+	if _is_baking:
+		printerr("a bake is already running")
+		return
+	_is_baking = true
+	await _bake(debug)
+	_is_baking = false
+
+func _bake(debug: bool) -> void:
 	# init
 	var start_time := Time.get_ticks_usec()
 	if debug:
@@ -75,13 +84,26 @@ func bake_sound_grid(debug: bool = false) -> void:
 			await tree.process_frame
 
 	# Keep the fine wall grid for exact wall and position queries. Only free cells
-	# are grouped into cubes; all runtime connections are baked from shared faces.
+	# are grouped into boxes; all runtime connections are baked from shared faces.
 	var max_side_cells: int = maxi(1, floori(max_cluster_width / cell_size))
-	clusterBakeData = NoxelClusterStorage.new()
+	var chunk_start_usec := Time.get_ticks_usec()
+	var clusters := NoxelClusterStorage.new()
 	chunk_progress.emit(0.0)
-	await tree.process_frame
-	await clusterBakeData.build(wallBakeData, vGridDimensions, max_side_cells, Callable(self, "_on_chunk_progress"), tree)
-	print("baked " + str(clusterBakeData.cluster_sides.size()) + " clusters and " + str(clusterBakeData.neighbor_ids.size()) + " directed connections")
+	if tree:
+		# Chunking runs on a worker thread so the editor (or loading screen) keeps
+		# drawing at full speed. The result is only attached once it is complete.
+		var walls := wallBakeData
+		var grid_size := vGridDimensions
+		var task_id := WorkerThreadPool.add_task(func() -> void: clusters.build(walls, grid_size, max_side_cells), true, "HKNoxel chunking")
+		while not WorkerThreadPool.is_task_completed(task_id):
+			chunk_progress.emit(clusters.build_progress)
+			await tree.process_frame
+		WorkerThreadPool.wait_for_task_completion(task_id)
+	else:
+		clusters.build(wallBakeData, vGridDimensions, max_side_cells)
+	clusterBakeData = clusters
+	chunk_progress.emit(1.0)
+	print("baked " + str(clusters.get_cluster_count()) + " clusters and " + str(clusters.neighbor_ids.size()) + " directed connections in " + str((Time.get_ticks_usec() - chunk_start_usec) / 1000.0) + " ms")
 	
 	if debug:
 		print("DEBUG MODE: creating debug-meshes now")
@@ -92,8 +114,6 @@ func bake_sound_grid(debug: bool = false) -> void:
 	print("finished baking: " + str(wallcount) + "/" + str(totalCount) + " (" + str(float(wallcount) / float(totalCount) * 100).substr(0, 5) + " %) cells were detected as walls in " + str(elapsed_usec / 1000.0) + " ms")
 	bake_complete.emit()
 
-func _on_chunk_progress(progress: float) -> void:
-	chunk_progress.emit(progress)
 const DEBUG_NODE_NAME := "HKNoxelDebugVisualization"
 
 func remove_debug_visualization() -> void:
