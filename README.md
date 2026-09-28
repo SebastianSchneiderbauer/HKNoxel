@@ -34,7 +34,7 @@ For this we assume that `Cell Size` and `Max Cluster` are set to their default v
 <img width="1120" height="640" alt="WallDetector" src="https://github.com/user-attachments/assets/0e0f4030-4b5b-425b-85b7-c491c45152f5" />
 
 2) After this, an algorythm searches for Noxels which can be merged into `Clusters`. These are stricly 3 dimensional `Cubes`, having the dimensions of 1x1x1, 2x2x2, 3x3x3, 4x4x4 or 5x5x5 (depending on your `Max Cluster`). This way up to `125` Noxels are merged into `1`, saving tons of computing power.
-<img width="1120" height="640" alt="Chunker" src="https://github.com/user-attachments/assets/1e916f13-4e9c-4074-b40a-9622bdd75596" />
+<img width="1120" height="640" alt="animation" src="https://github.com/user-attachments/assets/7b177eae-8f4f-47cd-9a6a-181e47daf02b" />
 
 3) As a final performence buff, neighbours of Clusters are also baked, so sound spreading from Cluster to Cluster is even more effortless
 4) NOTE: i am currently working on a version that does not do perfect cube clusters, but makes them just scale up to 5x5x5, but could also be 3x5x2. However the logic is the same, and i cannot be bothered to to make a new Animation
