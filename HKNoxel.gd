@@ -82,7 +82,7 @@ func _bake(debug: bool) -> void:
 		
 		if tree:
 			await tree.process_frame
-
+	
 	# Keep the fine wall grid for exact wall and position queries. Only free cells
 	# are grouped into boxes; all runtime connections are baked from shared faces.
 	var max_side_cells: int = maxi(1, floori(max_cluster_width / cell_size))
