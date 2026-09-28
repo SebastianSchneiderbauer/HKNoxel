@@ -1,6 +1,6 @@
 # <img width="32" height="32" alt="image" src="https://github.com/user-attachments/assets/8e78bb90-1c94-4706-ae5e-18927339bb3d" /> HKNoxel 
 
-version 2.0 of my noise propagation system
+version 3.0 of my noise propagation system
 
 a godot addon which adds the capability for voxel based noise propagation
 
