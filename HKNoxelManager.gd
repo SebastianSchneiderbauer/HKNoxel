@@ -2,7 +2,7 @@ extends Node
 
 const SOUND_FLOOR: float = 0.1
 const CONFINEMENT_DEDUCTION: float = 0.4
-const CONSTANT_DEDUCTION_MULTIPLIER: float = 0.95
+const CONSTANT_DEDUCTION_MULTIPLIER: float = 0.6
 
 var currentNoxelMap
 var walls: NoxelWallStorage
