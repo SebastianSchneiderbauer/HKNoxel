@@ -456,11 +456,11 @@ anchor_left = 1.0
 anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = -208.0
-offset_top = -153.0
+offset_left = -283.0
+offset_top = -186.0
 grow_horizontal = 0
 grow_vertical = 0
-pivot_offset = Vector2(208, 153)
+pivot_offset = Vector2(283, 185)
 size_flags_horizontal = 8
 size_flags_vertical = 8
 
@@ -472,8 +472,7 @@ text = "CONTROLLS:
 - use ESC and SPACE to go 
    up and down with the cam
 - use CTRL + Z to reset camera
-- press CTRL + Y to emit
-   a sound"
+- press CTRL + Y to emit a sound"
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="CameraSocket" unique_id=1452092195]
 environment = SubResource("Environment_m7lay")

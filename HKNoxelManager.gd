@@ -15,11 +15,17 @@ var cellCount: int
 # Sound is stored once per free cluster, while position and wall queries still
 # resolve through the fine grid. Newly activated clusters run on the next tick.
 var soundLevel: PackedFloat32Array
-var emitter: PackedByteArray
+var soundId: PackedInt32Array # per cluster: winning sound instance, -1 = none
 var activeClusterIds: Array[int]
 var _activeFlags: PackedByteArray
 var _soundLevelSnapshot: PackedFloat32Array
-var _emitterSnapshot: PackedByteArray
+var _soundSnapshot: PackedInt32Array
+# Sound instances: one per emitSound call that is still audible somewhere.
+# They carry the emitter and the origin; clusters only point at them.
+var _soundEmitter: PackedInt32Array
+var _soundOrigin: PackedVector3Array
+var _soundAlive: PackedByteArray
+var _soundFreeIds: Array[int] = []
 var _cachedWallRevision: int = -1
 var _cachedMaxSideCells: int = -1
 var _sideDeductions: PackedFloat32Array
@@ -63,7 +69,11 @@ func _clearGrid() -> void:
 	dimensions = Vector3i.ZERO
 	cellCount = 0
 	soundLevel.clear()
-	emitter.clear()
+	soundId.clear()
+	_soundEmitter.clear()
+	_soundOrigin.clear()
+	_soundAlive.clear()
+	_soundFreeIds.clear()
 	_activeFlags.clear()
 	activeClusterIds.clear()
 	_cachedWallRevision = -1
@@ -106,8 +116,8 @@ func _rebuildClusterCache() -> void:
 	var cluster_count: int = clusters.get_cluster_count()
 	soundLevel.resize(cluster_count)
 	soundLevel.fill(0.0)
-	emitter.resize(cluster_count)
-	emitter.fill(0)
+	soundId.resize(cluster_count)
+	soundId.fill(-1)
 	_activeFlags.resize(cluster_count)
 	_activeFlags.fill(0)
 	activeClusterIds.clear()
@@ -282,8 +292,19 @@ func emitSound(startPosition: Vector3, decibels: int, emitterId: int) -> void:
 		decibels = 255
 	if soundLevel[cluster_id] > decibels:
 		return
+	var sound_id: int
+	if _soundFreeIds.is_empty():
+		sound_id = _soundEmitter.size()
+		_soundEmitter.append(emitterId)
+		_soundOrigin.append(startPosition)
+		_soundAlive.append(1)
+	else:
+		sound_id = _soundFreeIds.pop_back()
+		_soundEmitter[sound_id] = emitterId
+		_soundOrigin[sound_id] = startPosition
+		_soundAlive[sound_id] = 1
 	soundLevel[cluster_id] = decibels
-	emitter[cluster_id] = emitterId
+	soundId[cluster_id] = sound_id
 	if _activeFlags[cluster_id] == 0:
 		_activeFlags[cluster_id] = 1
 		activeClusterIds.append(cluster_id)
@@ -296,7 +317,19 @@ func getNoxelInformation(wantedPosition: Vector3) -> Vector2:
 	var cluster_id: int = clusters.cell_to_cluster[cell_index]
 	if cluster_id < 0:
 		return Vector2.ZERO
-	return Vector2(soundLevel[cluster_id], emitter[cluster_id])
+	return Vector2(soundLevel[cluster_id], _soundEmitter[soundId[cluster_id]] if soundId[cluster_id] >= 0 else 0)
+
+## Loudest sound reaching this position: {level, emitter, origin, sound_id}, or {} if silent.
+## Origin is where the sound was emitted, even if the emitter has moved or been freed.
+func getSoundAt(wantedPosition: Vector3) -> Dictionary:
+	var cell_index: int = _indexOf(wantedPosition)
+	if cell_index < 0:
+		return {}
+	var cluster_id: int = clusters.cell_to_cluster[cell_index]
+	if cluster_id < 0 or soundId[cluster_id] < 0:
+		return {}
+	var s: int = soundId[cluster_id]
+	return {"level": soundLevel[cluster_id], "emitter": _soundEmitter[s], "origin": _soundOrigin[s], "sound_id": s}
 
 func setDebugMode(debug: bool) -> void:
 	if _isDebug and not debug:
@@ -324,11 +357,11 @@ func simulateSound(generateDebug: bool = false) -> void:
 	if _soundLevelSnapshot.size() < active_count:
 		var capacity: int = maxi(active_count, maxi(1, _soundLevelSnapshot.size() * 2))
 		_soundLevelSnapshot.resize(capacity)
-		_emitterSnapshot.resize(capacity)
+		_soundSnapshot.resize(capacity)
 	for i: int in active_count:
 		var cluster_id: int = activeClusterIds[i]
 		_soundLevelSnapshot[i] = soundLevel[cluster_id]
-		_emitterSnapshot[i] = emitter[cluster_id]
+		_soundSnapshot[i] = soundId[cluster_id]
 	
 	# Decay the old field first. Incoming sound then competes with the decayed
 	# value, so processing order cannot erase a stronger arrival in this tick.
@@ -339,7 +372,7 @@ func simulateSound(generateDebug: bool = false) -> void:
 			soundLevel[cluster_id] = decayed
 		else:
 			soundLevel[cluster_id] = 0.0
-			emitter[cluster_id] = 0
+			soundId[cluster_id] = -1
 	
 	for i: int in active_count:
 		var source_id: int = activeClusterIds[i]
@@ -349,7 +382,7 @@ func simulateSound(generateDebug: bool = false) -> void:
 			if candidate < SOUND_FLOOR or candidate <= soundLevel[destination_id]:
 				continue
 			soundLevel[destination_id] = candidate
-			emitter[destination_id] = _emitterSnapshot[i]
+			soundId[destination_id] = _soundSnapshot[i]
 			if _activeFlags[destination_id] == 0:
 				_activeFlags[destination_id] = 1
 				activeClusterIds.append(destination_id)
@@ -366,8 +399,19 @@ func simulateSound(generateDebug: bool = false) -> void:
 	
 	_freeQueueDetector.resize(256)
 	_freeQueueDetector.fill(0)
+	# Sounds no cluster points at are gone; emitters stay pinned while a sound of theirs lives.
+	var referenced := PackedByteArray()
+	referenced.resize(_soundEmitter.size())
 	for cluster_id: int in activeClusterIds:
-		_freeQueueDetector[emitter[cluster_id]] = 1
+		referenced[soundId[cluster_id]] = 1
+	for s: int in _soundEmitter.size():
+		if _soundAlive[s] == 0:
+			continue
+		if referenced[s] == 0:
+			_soundAlive[s] = 0
+			_soundFreeIds.append(s)
+		else:
+			_freeQueueDetector[_soundEmitter[s]] = 1
 	var still_pending: PackedByteArray
 	for queued_id: int in _freeQueue:
 		if _freeQueueDetector[queued_id] == 0:
